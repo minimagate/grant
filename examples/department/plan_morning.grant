@@ -1,5 +1,3 @@
--- plan_morning: everything before lunch.
-
 from department
 
 linear_algebra        [ taught_by: noether | meets_in: aula_magna | meets_at: mon_9 ]

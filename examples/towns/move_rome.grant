@@ -1,4 +1,3 @@
--- move_rome
 from town
 harbor [ lives_in: rome ]
 harbor feels happy

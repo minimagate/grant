@@ -156,7 +156,7 @@ grant review
 grant watch review      # then edit people.grant, or a plan, and watch the verdict move
 ```
 
-The rest of [`examples`](examples) has the worlds of the specification, a merge to settle, worlds compared as objects, and a calendar built on `numbers`.
+The rest of [`examples`](examples) has the worlds of the specification, a merge to settle, worlds compared as objects, and a calendar built on `numbers`. The example files carry no comments; [`examples/README.md`](examples/README.md) explains each one.
 
 ## Editor support
 

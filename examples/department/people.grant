@@ -1,5 +1,3 @@
--- people: who teaches, who studies, and what the students have passed and want.
-
 from vocabulary, catalogue
 
 person noether [ name: "Emmy"     | is: lecturer | can_teach: algebra, logic ]

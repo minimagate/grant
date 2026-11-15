@@ -1,4 +1,3 @@
--- compare: worlds as objects
 from numbers
 
 world towns/move_rome

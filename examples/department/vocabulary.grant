@@ -1,23 +1,20 @@
--- vocabulary: the words every world of the department shares.
--- Nothing exists here yet: only the kinds of things and the relations they can have.
-
 from numbers, text
 
 kind area
 kind role
 kind room [ seats: one number ]
 kind slot [
-  day:   one number        -- 1 is Monday
+  day:   one number
   hour:  one number
-  is:    role              -- a flag: afternoon
+  is:    role
 ]
 
 kind course [
   title:     one text
   credits:   one number
   area:      one area
-  requires:  course        -- stated: what must be passed first
-  needs:     course        -- derived: everything that must be passed first
+  requires:  course
+  needs:     course
 ]
 
 kind person [

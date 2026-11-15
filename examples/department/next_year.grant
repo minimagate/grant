@@ -1,13 +1,8 @@
--- next_year: the merged plan, one year on. A child is instructions applied to its parent:
--- if the plans above change, this world is run again on whatever they have become.
-
 from plan_merged
 
--- Every student passes what they were ready to take. Computed once, here.
 each person s where s is student [ passed: + s.may_take ]
 - each person s where (s is student) wants
 
--- Two graduate, one arrives, and one lecturer retires.
 - chiara
 - elena
 - godel
@@ -17,7 +12,6 @@ ada   [ wants: analysis_2, group_theory, topology ]
 bruno [ wants: galois_theory, differential_geometry ]
 dario [ wants: galois_theory, analysis_2 ]
 
--- Logic has lost its lecturer but not its students. noether can teach it.
 ? course c and c.demand > 0 and not c taught_by person t
 logic_1 [ taught_by: noether ]
 

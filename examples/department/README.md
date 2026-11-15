@@ -29,19 +29,115 @@ grant review
 grant watch review      # then edit people.grant, or a plan, and watch the verdict move
 ```
 
-## What each world shows
+## The worlds, one by one
 
-| World | Shows |
+The files carry no comments; this is what each one does.
+
+### `vocabulary`
+
+Only declares. It builds on `numbers` and `text` and states the kinds everything else shares: `area`, `role`, `room`, `slot`, `course` and `person`, each with its shape. Nothing exists yet except three roles, `lecturer`, `student` and `afternoon`, which are flags: values a relation can hold. One rule marks a slot as afternoon when its hour is 14 or later.
+
+A course has `requires`, which is stated, and `needs`, which is derived. Both are declared here, because stated and derived facts share a shape.
+
+### `catalogue`
+
+Four areas and eight courses, each with a title, credits, an area and what it requires.
+
+- `rule needs` is recursive: a course needs what it requires, and what those need in turn.
+- `never circular` forbids a course from standing, however far back, behind itself.
+
+| Question | Shows |
 | --- | --- |
-| `vocabulary` | A world that only declares. Kinds, shapes with `one`, `some` and `maybe`, flags as values (`role afternoon`), a rule over numbers. |
-| `catalogue` | Objects and facts in brackets. A recursive rule (`needs` is everything a course requires, all the way back). A constraint that forbids circular prerequisites. Sums over a chain of dots. |
-| `campus` | A second world on the same vocabulary, written without knowing about the first. |
-| `people` | A world with two parents. Brackets on one line for short entries, one entry per line for long ones. |
-| `department` | Three parents with a common ancestor become one world: same kinds by name, same objects by origin. Shapes extended with `+`. Negation inside negation (`may_take`), a rule whose value is counted (`demand`), a rule whose value is summed (`load`), and five constraints that are only checked when a world ends. |
-| `plan_morning`, `plan_spread` | Two children of the same parent. Sentences set in brackets. Each defines `overloaded` its own way. |
-| `plan_merged` | A merge. Every course carries the facts of both plans until the lines settle it; the rule defined two ways produces nothing until it is restated. |
-| `review` | Worlds as objects. Rules that count inside held worlds with `in`, a verdict built from two orderings, the same lecturer followed across worlds by origin, and equality of shape. |
-| `next_year` | Changing a world: `each … [ r: + … ]` computed once, `- each`, removing objects, and constraints that hold again at the end. |
+| `? differential_geometry.needs` | linear_algebra, analysis_1, analysis_2, topology |
+| `? course c and not c requires course p` | linear_algebra, analysis_1, logic_1: where a first-year student can start |
+| `? sum galois_theory.needs.credits` | 15: the credits to earn before Galois Theory |
+
+### `campus`
+
+Three rooms with their seats and eight slots, each with a day (1 is Monday) and an hour. It is written on the same vocabulary as the catalogue without knowing about it. Its question shows the afternoon slots: mon_14, tue_14.
+
+### `people`
+
+Built on `vocabulary` and `catalogue`. Four lecturers with the areas they can teach, and five students with what they have passed and what they want. Short entries are on one line; long ones put one relation per line.
+
+### `department`
+
+The union of `campus`, `people` and `catalogue`. All three build on `vocabulary`, so their kinds are the same kinds and their objects the same objects; the order of parents doesn't matter.
+
+It extends two shapes with `+`: people get `may_take`, `teaches`, `load` and `clashes_on`; courses get `taught_by`, `meets_in`, `meets_at` and `demand`. It also creates the flag `overloaded`, which each plan will define.
+
+| Rule | Says |
+| --- | --- |
+| `may_take` | a student may take a course they want once nothing it needs is left to pass (a `not` inside a `not`) |
+| `demand` | a course's demand is the count of students who may take it |
+| `teaches` | the other direction of `taught_by` |
+| `load` | a lecturer's load is the sum of the credits they teach |
+| `clash` | a student clashes on a slot when two courses they may take meet then |
+
+| Constraint | Forbids |
+| --- | --- |
+| `unqualified` | a course taught by someone who can't teach its area |
+| `room_taken` | two courses in the same room at the same hour |
+| `two_places` | one lecturer teaching two courses at the same hour |
+| `too_small` | a room with fewer seats than the course's demand |
+
+Constraints are checked when a world ends, so a plan can be written in any order and pass through broken states on the way.
+
+| Question | Shows |
+| --- | --- |
+| `? person s wants course c and not s may_take c` | dario, galois_theory: he hasn't passed group theory |
+| `? course c and c.demand = 0` | nothing |
+
+### `plan_morning` and `plan_spread`
+
+Two children of `department`. Each gives every course a lecturer, a room and a slot, adds the constraint `untaught` (a course in demand with no lecturer), and defines `overloaded` its own way.
+
+| | `plan_morning` | `plan_spread` |
+| --- | --- | --- |
+| Hours | everything before lunch | two courses in the afternoon |
+| Analysis II | riemann, mon_9 | cauchy, mon_14 |
+| Clashes | dario on tue_9, elena on wed_9 | none |
+| `overloaded` means | load above 24 | load above 20 |
+| Overloaded | riemann (30) | noether (21), cauchy (24) |
+
+### `plan_merged`
+
+Built on both plans. Every course is the same course in both, so it carries the facts of both: four courses have two hours and Analysis II has two lecturers. Nothing fails; the first two questions show the disagreement.
+
+Four lines settle it by stating what is true, taking the hours of `plan_spread`. The parents also define `overloaded` two ways. Until it is restated it produces nothing, which is why the question before the restated rule shows nothing. After it, with the threshold at 24, nobody is overloaded: cauchy carries exactly 24.
+
+The last questions show no clashes and the loads: noether 21, cauchy 24, riemann 18, godel 6.
+
+### `review`
+
+Holds the three plans as objects with `world`. A plan can't be changed from here; it can only be looked into with `in`.
+
+| Rule | Says |
+| --- | --- |
+| `clashes` | plan a clashes less than plan b when fewer student clashes are counted inside it |
+| `spares` | plan a spares more than plan b when fewer lecturers are overloaded inside it |
+| `best` | a plan is best when no other plan beats it on either count |
+
+| Question | Shows |
+| --- | --- |
+| `? world a clashes_less_than world b` | plan_spread and plan_merged each beat plan_morning |
+| `? world a spares_more_than world b` | plan_morning beats plan_spread; plan_merged beats both |
+| `? world w is best` | plan_merged |
+| `? in plan_morning: person s clashes_on slot k` | dario on tue_9, elena on wed_9 |
+| `? in plan_spread: cauchy.load` | 24 |
+| `? (in plan_morning: riemann is overloaded) and not (in plan_merged: riemann is overloaded)` | yes: the same riemann, by origin, in two worlds |
+| `? plan_merged = plan_spread` | no: the same hours, but a different rule |
+| `? plan_merged = plan_merged` | yes |
+
+### `next_year`
+
+Built on `plan_merged`. It is instructions applied to its parent: if the plans change, this world is run again on whatever they have become.
+
+1. Every student passes what they were ready to take (`each … [ passed: + s.may_take ]`, computed once), and their wishes are cleared.
+2. chiara and elena graduate, godel retires, and fabio arrives.
+3. The remaining students state new wishes.
+
+The first question finds a course in demand with no lecturer, logic_1, which would break `untaught` at the end; the next line gives it to noether. Then fabio is held back from group theory, noether's load is 27, and nobody clashes.
 
 ## Things to try
 

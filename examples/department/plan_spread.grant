@@ -1,5 +1,3 @@
--- plan_spread: the same courses, using the afternoons, with Analysis II given to cauchy.
-
 from department
 
 linear_algebra        [ taught_by: noether | meets_in: aula_magna | meets_at: mon_9 ]
@@ -12,7 +10,7 @@ galois_theory         [ taught_by: noether | meets_in: seminar    | meets_at: we
 differential_geometry [ taught_by: riemann | meets_in: seminar    | meets_at: tue_14 ]
 
 never untaught: course c where c.demand > 0 and not c taught_by person t
-rule overloaded: person t is overloaded if t.load > 20      -- a stricter idea of too much
+rule overloaded: person t is overloaded if t.load > 20
 
 ? person s clashes_on slot k
 ? person t is overloaded

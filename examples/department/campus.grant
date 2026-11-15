@@ -1,5 +1,3 @@
--- campus: the rooms, and the hours of the week in which teaching happens.
-
 from vocabulary
 
 room aula_magna [ seats: 120 ]

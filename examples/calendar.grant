@@ -1,6 +1,3 @@
--- calendar: time is not a primitive. A date is a number of days, and a calendar is a world
--- built on numbers, using div and mod. (Civil dates from a day count, 1 Jan 1970 = day 0.)
-
 from numbers, text
 
 kind weekday [ number: one number ]
@@ -13,9 +10,9 @@ weekday tuesday   [ number: 5 ]
 weekday wednesday [ number: 6 ]
 
 kind date [
-  days:    one number     -- stated: days since 1 Jan 1970
+  days:    one number
   falls:   one weekday
-  era:     one number     -- the rest follow
+  era:     one number
   doe:     one number
   yoe:     one number
   doy:     one number
@@ -37,7 +34,7 @@ rule year:  date d year d.yoe + d.era * 400 + (13 - d.month) div 11
 
 date today [ days: 20771 ]
 
-? today.year      -- 2026
-? today.month     -- 11
-? today.day       -- 14
-? today.falls     -- saturday
+? today.year
+? today.month
+? today.day
+? today.falls

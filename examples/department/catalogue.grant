@@ -1,5 +1,3 @@
--- catalogue: the courses, and what each requires.
-
 from vocabulary
 
 area algebra
@@ -21,12 +19,10 @@ course differential_geometry [
   requires:  topology, analysis_2, linear_algebra
 ]
 
--- What a course needs is what it requires, and what those need in turn.
 rule needs: course c needs course p if c requires p or (c requires course q and q needs p)
 
--- No course may stand, however far back, behind itself.
 never circular: course c where c needs c
 
 ? differential_geometry.needs
-? course c and not c requires course p        -- where a first-year student can start
-? sum galois_theory.needs.credits             -- credits to earn before Galois Theory
+? course c and not c requires course p
+? sum galois_theory.needs.credits
