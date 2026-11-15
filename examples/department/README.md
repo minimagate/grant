@@ -85,7 +85,7 @@ Constraints are checked when a world ends, so a plan can be written in any order
 
 | Question | Shows |
 | --- | --- |
-| `? person s wants course c and not s may_take c` | dario, galois_theory: he hasn't passed group theory |
+| `? person s wants course c and not s may_take c` | devon, galois_theory: he hasn't passed group theory |
 | `? course c and c.demand = 0` | nothing |
 
 ### `plan_morning` and `plan_spread`
@@ -96,7 +96,7 @@ Two children of `department`. Each gives every course a lecturer, a room and a s
 | --- | --- | --- |
 | Hours | everything before lunch | two courses in the afternoon |
 | Analysis II | riemann, mon_9 | cauchy, mon_14 |
-| Clashes | dario on tue_9, elena on wed_9 | none |
+| Clashes | devon on tue_9, ellie on wed_9 | none |
 | `overloaded` means | load above 24 | load above 20 |
 | Overloaded | riemann (30) | noether (21), cauchy (24) |
 
@@ -123,7 +123,7 @@ Holds the three plans as objects with `world`. A plan can't be changed from here
 | `? world a clashes_less_than world b` | plan_spread and plan_merged each beat plan_morning |
 | `? world a spares_more_than world b` | plan_morning beats plan_spread; plan_merged beats both |
 | `? world w is best` | plan_merged |
-| `? in plan_morning: person s clashes_on slot k` | dario on tue_9, elena on wed_9 |
+| `? in plan_morning: person s clashes_on slot k` | devon on tue_9, ellie on wed_9 |
 | `? in plan_spread: cauchy.load` | 24 |
 | `? (in plan_morning: riemann is overloaded) and not (in plan_merged: riemann is overloaded)` | yes: the same riemann, by origin, in two worlds |
 | `? plan_merged = plan_spread` | no: the same hours, but a different rule |
@@ -134,14 +134,14 @@ Holds the three plans as objects with `world`. A plan can't be changed from here
 Built on `plan_merged`. It is instructions applied to its parent: if the plans change, this world is run again on whatever they have become.
 
 1. Every student passes what they were ready to take (`each … [ passed: + s.may_take ]`, computed once), and their wishes are cleared.
-2. chiara and elena graduate, godel retires, and fabio arrives.
+2. claire and ellie graduate, godel retires, and felix arrives.
 3. The remaining students state new wishes.
 
-The first question finds a course in demand with no lecturer, logic_1, which would break `untaught` at the end; the next line gives it to noether. Then fabio is held back from group theory, noether's load is 27, and nobody clashes.
+The first question finds a course in demand with no lecturer, logic_1, which would break `untaught` at the end; the next line gives it to noether. Then felix is held back from group theory, noether's load is 27, and nobody clashes.
 
 ## Things to try
 
-- In `people.grant`, let dario pass `group_theory`. He is no longer held back from Galois
+- In `people.grant`, let devon pass `group_theory`. He is no longer held back from Galois
   Theory, its demand rises, and every world below is run again.
 - In `campus.grant`, give `seminar` 1 seat. Both plans now end with `too_small`, and
   `review` reports that `plan_morning` has errors.

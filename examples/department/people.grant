@@ -26,26 +26,26 @@ person ada [
   is:     student
   wants:  linear_algebra, analysis_1, logic_1
 ]
-person bruno [
-  name:    "Bruno"
+person blake [
+  name:    "Blake"
   is:      student
   passed:  linear_algebra, analysis_1
   wants:   analysis_2, group_theory, topology
 ]
-person chiara [
-  name:    "Chiara"
+person claire [
+  name:    "Claire"
   is:      student
   passed:  linear_algebra, analysis_1, analysis_2, topology
   wants:   differential_geometry, group_theory, logic_1
 ]
-person dario [
-  name:    "Dario"
+person devon [
+  name:    "Devon"
   is:      student
   passed:  linear_algebra
   wants:   galois_theory, group_theory, analysis_1
 ]
-person elena [
-  name:    "Elena"
+person ellie [
+  name:    "Ellie"
   is:      student
   passed:  linear_algebra, group_theory, analysis_1
   wants:   galois_theory, topology, analysis_2

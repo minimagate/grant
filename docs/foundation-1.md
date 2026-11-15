@@ -98,7 +98,7 @@ W = (K, O, F, R)
 - **Identity** is where an object was created: the world that created it and its place in that world's order of creation. It is never written and never seen. It is what makes harbor in one world the same harbor in another.
 - **Vocabulary by name, things by origin.** Kinds, relations, rules and constraints are identified by their names. Objects are identified by their origin. Two objects can share a handle; two kinds can't share a name.
 - **Facts are a set.** Stating the same fact twice is stating it once. Order is lost; only the structure remains.
-- **A fact's value** is an object or a primitive value (`24`, `"Harbor Rossi"`).
+- **A fact's value** is an object or a primitive value (`24`, `"Harbor Reed"`).
 - **Derived facts** are not stored. D is everything the rules produce from F, recomputed whenever F or R changes. Questions see F and D together:
 
 ```
@@ -107,7 +107,7 @@ M = F ∪ D(F, R)
 
 ### Equality
 
-Two worlds are equal when they have the same kinds, rules and constraints, and their objects can be matched one to one so that every object's kind and every fact correspond. Handles, identities and indexes don't matter: equality compares **shape**. A world with anna in place of harbor, and everything else the same, is equal.
+Two worlds are equal when they have the same kinds, rules and constraints, and their objects can be matched one to one so that every object's kind and every fact correspond. Handles, identities and indexes don't matter: equality compares **shape**. A world with june in place of harbor, and everything else the same, is equal.
 
 ---
 
@@ -124,7 +124,7 @@ A world without `from numbers` has no numbers.
 | World | Kind | Holds | Example |
 | --- | --- | --- | --- |
 | `numbers` | `number` | exact numbers, `+ - * / div mod`, `< > <= >=` | `24`, `3.5`, `-2` |
-| `text` | `text` | written content, `+` to join, `< > <= >=` (alphabetical) | `"Harbor Rossi"` |
+| `text` | `text` | written content, `+` to join, `< > <= >=` (alphabetical) | `"Harbor Reed"` |
 | `id` | `id` | one index per number, related to every object with that number | `id.1` |
 
 Time is not a primitive: a date is a number of days, and a calendar is a world built on `numbers`, using `div` and `mod`.
@@ -340,9 +340,9 @@ Running a world shows its own questions only. A parent's questions are not repea
 ### Facts and objects
 
 ```
-+ harbor knows marco            -- adds: harbor knows liz, laurie, marco
++ harbor knows robin            -- adds: harbor knows liz, laurie, robin
 harbor [ lives_in: rome ]       -- brackets set: rome replaces pisa
-harbor [ knows: + marco, - liz ]
+harbor [ knows: + robin, - liz ]
 - harbor knows liz              -- one fact
 - harbor knows                  -- every knows from harbor
 - harbor                        -- harbor and every fact touching it
@@ -422,7 +422,7 @@ Because a child is instructions, most of it keeps its meaning:
 
 - `harbor [ lives_in: rome ]` still sets rome, whatever town now says harbor's home is.
 - `- harbor feels happy` does nothing if town no longer says it.
-- `harbor knows marco` still adds.
+- `harbor knows robin` still adds.
 
 Some lines can stop making sense. If town removes harbor, `harbor [ lives_in: rome ]` now points at nothing, and the child fails with an error that names the cause: "harbor doesn't exist (removed in town)". Grant never guesses what a broken line meant.
 
@@ -436,7 +436,7 @@ from move_rome, move_florence
 A world with several parents starts from their **union**: every kind, object, fact, rule and constraint that any parent has. Order doesn't matter: `from a, b` and `from b, a` are the same world.
 
 - **Same origin, same object.** harbor in move_rome and harbor in move_florence both come from town, so the child has one harbor carrying the facts of both.
-- **Different origin, different objects.** If each parent created its own marco, the child has two marcos, and `the` tells them apart.
+- **Different origin, different objects.** If each parent created its own robin, the child has two marcos, and `the` tells them apart.
 - **Same name, same vocabulary.** A kind declared in both parents is one kind, and its shape has every relation either parent declared. Rules and constraints with the same name are one rule or constraint.
 - **A merge keeps what either parent says.** If move_rome removed `harbor feels happy` and move_florence still has it, the child has it. To remove it, the child removes it.
 

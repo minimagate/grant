@@ -88,7 +88,7 @@ fn the_examples_run() {
     let review = example("department/review.grant");
     assert_eq!(review[2], "plan_merged");
     assert_eq!(review[5..], ["yes", "no", "yes"]);
-    assert_eq!(example("department/next_year.grant")[..2], ["logic_1", "s: fabio, c: group_theory"]);
+    assert_eq!(example("department/next_year.grant")[..2], ["logic_1", "s: felix, c: group_theory"]);
 }
 
 #[test]
@@ -111,17 +111,14 @@ fn values_and_expressions() {
          ? sum harbor.knows.age
          ? max harbor.knows.age
          ? min harbor.knows.age
-         ? \"Harbor\" + \" \" + \"Rossi\"
+         ? \"Harbor\" + \" \" + \"Reed\"
          ? harbor.feels
          ? count (person p lives_in pisa)
          ? harbor.age - 30
          ? 3.5 + 0.25
          ? \"alice\" < \"Zed\"",
     ));
-    assert_eq!(
-        shown,
-        ["pisa, rome", "50", "3", "2", "1/3", "2", "57", "30", "27", "\"Harbor Rossi\"", "nothing", "2", "-6", "3.75", "yes"]
-    );
+    assert_eq!(shown, ["pisa, rome", "50", "3", "2", "1/3", "2", "57", "30", "27", "\"Harbor Reed\"", "nothing", "2", "-6", "3.75", "yes"]);
 }
 
 #[test]
@@ -192,20 +189,20 @@ fn questions_show_values_truth_and_matches() {
 fn rules_derive_live_and_recursively() {
     let shown = shows(&town(
         "kind person [ + can_reach: person ]
-         person marco [ age: 12 | lives_in: rome ]
+         person robin [ age: 12 | lives_in: rome ]
          rule mutual: person a knows person b if b knows a
          rule adult:  person p is adult if p.age >= 18
          rule reach:  person a can_reach person b if a knows b or (a knows person m and m can_reach b)
          ? liz.knows
          ? person p is adult
          ? liz can_reach laurie
-         ? marco can_reach liz
-         laurie knows marco
-         ? marco can_reach liz
-         marco [ age: 18 ]
-         ? marco is adult
+         ? robin can_reach liz
+         laurie knows robin
+         ? robin can_reach liz
+         robin [ age: 18 ]
+         ? robin is adult
          - rule adult
-         ? marco is adult",
+         ? robin is adult",
     ));
     assert_eq!(shown, ["harbor", "liz, laurie, harbor", "yes", "no", "yes", "yes", "no"]);
 }
@@ -243,12 +240,12 @@ fn rules_cannot_depend_on_their_own_negation_or_aggregate() {
 #[test]
 fn changing_facts() {
     let shown = shows(&town(
-        "person marco [ age: 40 | lives_in: rome ]
-         + harbor knows marco
+        "person robin [ age: 40 | lives_in: rome ]
+         + harbor knows robin
          ? harbor.knows
          harbor [ lives_in: rome ]
          ? harbor.lives_in
-         harbor [ knows: + liz, - marco ]
+         harbor [ knows: + liz, - robin ]
          ? harbor.knows
          harbor [ knows: + laurie.knows ]
          - harbor knows liz
@@ -257,7 +254,7 @@ fn changing_facts() {
          ? harbor.knows
          harbor [ age: harbor.age + 1 ]
          ? harbor.age
-         - marco
+         - robin
          ? person p lives_in rome
          - harbor knows ghost
          - ghost",
@@ -265,7 +262,7 @@ fn changing_facts() {
     assert_eq!(
         shown,
         [
-            "liz, laurie, marco",
+            "liz, laurie, robin",
             "rome",
             "liz, laurie",
             "laurie",
@@ -350,7 +347,7 @@ fn errors_on_a_line() {
     assert_eq!(fails(&town("rule r: person p is adult if p.colour = 1")), "person has no relation `colour`");
     assert_eq!(fails(&town("rule r: person p is adult if p lives_in happy")), "`lives_in` takes a city, not a feeling");
     assert_eq!(fails(&town("harbor.knows")), "this value isn't used");
-    assert_eq!(fails(&town("person marco\n? marco.age + 1")), "marco has no `age`");
+    assert_eq!(fails(&town("person robin\n? robin.age + 1")), "robin has no `age`");
     assert_eq!(fails(&town("? harbor.age / 0")), "division by zero");
     assert_eq!(fails(&town("? harbor.age + \"x\"")), "`+` needs two numbers or two texts, not a number and a text");
     assert_eq!(fails(&town("? harbor < liz")), "`<` orders two numbers or two texts, not a person and a person");
@@ -378,7 +375,7 @@ fn the_end_of_the_world_is_the_checkpoint() {
             "never sensible_age: person p where p.age < 0 or p.age > 150
              never adults_feel:  person p where p.age >= 18 and not p feels feeling f
              + harbor lives_in rome
-             person marco [ age: 200 ]
+             person robin [ age: 200 ]
              laurie feels happy
              liz feels happy
              harbor feels happy",
@@ -388,9 +385,9 @@ fn the_end_of_the_world_is_the_checkpoint() {
         problems,
         [
             "harbor has 2 `lives_in` (person: `lives_in: one city`)",
-            "marco has no `lives_in` (person: `lives_in: one city`)",
-            "marco breaks `adults_feel` (never adults_feel: person p where p.age >= 18 and not p feels feeling f)",
-            "marco breaks `sensible_age` (never sensible_age: person p where p.age < 0 or p.age > 150)",
+            "robin has no `lives_in` (person: `lives_in: one city`)",
+            "robin breaks `adults_feel` (never adults_feel: person p where p.age >= 18 and not p feels feeling f)",
+            "robin breaks `sensible_age` (never sensible_age: person p where p.age < 0 or p.age > 150)",
         ]
     );
     // A world is its final structure, not the order of its lines.
@@ -437,8 +434,8 @@ fn a_parent_with_errors_is_named() {
 
 #[test]
 fn several_parents_merge_by_union() {
-    let rome = ("move_rome", "from town\nharbor [ lives_in: rome ]\nperson marco [ age: 3 | lives_in: rome ]\n- harbor feels happy");
-    let florence = ("move_florence", "from town\nharbor [ lives_in: florence ]\nperson marco [ age: 4 | lives_in: florence ]");
+    let rome = ("move_rome", "from town\nharbor [ lives_in: rome ]\nperson robin [ age: 3 | lives_in: rome ]\n- harbor feels happy");
+    let florence = ("move_florence", "from town\nharbor [ lives_in: florence ]\nperson robin [ age: 4 | lives_in: florence ]");
     let both = |lines: &str| run(&[("town", BASE), rome, florence, ("both", &format!("from id, move_rome, move_florence\n{lines}"))]);
     // Same origin, same object; different origin, different objects; a merge keeps what either says.
     let shown = both(
@@ -447,20 +444,20 @@ fn several_parents_merge_by_union() {
          ? harbor feels happy
          ? id.2
          harbor [ lives_in: rome ]
-         ? the marco [ lives_in: florence ] age 4
-         person paolo [ age: 1 | lives_in: pisa ]
-         ? paolo.id",
+         ? the robin [ lives_in: florence ] age 4
+         person quinn [ age: 1 | lives_in: pisa ]
+         ? quinn.id",
     )
     .unwrap();
     assert_eq!(
         shown,
-        ["rome, florence", "3", "yes", "rome, marco (person 2 from move_rome), marco (person 2 from move_florence)", "yes", "3"]
+        ["rome, florence", "3", "yes", "rome, robin (person 2 from move_rome), robin (person 2 from move_florence)", "yes", "3"]
     );
     assert_eq!(
         ends_with(&[("town", BASE), rome, florence, ("both", "from move_florence, move_rome")]),
         ["harbor has 2 `lives_in` (person: `lives_in: one city`)"]
     );
-    assert!(both("marco [ age: 5 ]").unwrap_err().contains("2 objects called marco; use `the`"));
+    assert!(both("robin [ age: 5 ]").unwrap_err().contains("2 objects called robin; use `the`"));
 }
 
 #[test]
@@ -492,7 +489,7 @@ fn worlds_are_objects() {
     let sad = ("town_b", "from town\n- harbor feels happy");
     let twin = (
         "town_c",
-        "from numbers\nkind city\nkind feeling\nkind person [ age: one number | lives_in: one city | feels: feeling | is_at: feeling ]\ncity a\ncity b\ncity c\nfeeling glad\nperson anna [ age: 24 | lives_in: a | feels: glad ]",
+        "from numbers\nkind city\nkind feeling\nkind person [ age: one number | lives_in: one city | feels: feeling | is_at: feeling ]\ncity a\ncity b\ncity c\nfeeling glad\nperson june [ age: 24 | lives_in: a | feels: glad ]",
     );
     let compare = "from numbers
         world town_a
@@ -518,7 +515,7 @@ fn worlds_are_objects() {
     let held = |lines: &str| run(&[("town", BASE), ("w", &format!("world town\n{lines}"))]).unwrap_err();
     assert!(held("in town: harbor [ lives_in: rome ]").contains("town is held, not built on; write a world `from town`"));
     assert!(held("harbor [ lives_in: rome ]").contains("`harbor` doesn't exist yet"));
-    assert!(held("? in town: marco.age").contains("`marco` doesn't exist in town"));
+    assert!(held("? in town: robin.age").contains("`robin` doesn't exist in town"));
 }
 
 #[test]

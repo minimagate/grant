@@ -72,7 +72,7 @@ A decision marked **(extension)** adds something the grammar doesn't list.
 
 28. **A held world is its own identity.** `world town_a` stated in two parents is one object after a merge, and stating it twice holds it once. `world towns/town_a` holds the world at that path under the handle `town_a`.
 
-29. **Names inside `in w:` are w's**, looked up when the question is asked. Looking into a named world for a handle it doesn't have is an error ("`marco` doesn't exist in town"). When w is a variable ranging over held worlds, a world that lacks the handle or the kind simply has no matches.
+29. **Names inside `in w:` are w's**, looked up when the question is asked. Looking into a named world for a handle it doesn't have is an error ("`robin` doesn't exist in town"). When w is a variable ranging over held worlds, a world that lacks the handle or the kind simply has no matches.
 
 30. **A variable keeps its object across worlds.** `(in town_a: person p feels happy) and not (in town_c: p feels happy)` asks about the same p in both, by origin.
 
@@ -86,7 +86,7 @@ A decision marked **(extension)** adds something the grammar doesn't list.
 
 ## Showing
 
-34. **Things of one kind are shown in index order**; mixed kinds in order of creation. When several objects share a handle they are shown with kind and index, `harbor (person 4)`, and with the world that made them when the index repeats after a merge, `marco (person 2 from move_rome)`.
+34. **Things of one kind are shown in index order**; mixed kinds in order of creation. When several objects share a handle they are shown with kind and index, `harbor (person 4)`, and with the world that made them when the index repeats after a merge, `robin (person 2 from move_rome)`.
 
 35. **A line may nest 120 levels deep** (parentheses, `not`, `count ( … )`). Deeper is refused: "this line nests too deeply".
 

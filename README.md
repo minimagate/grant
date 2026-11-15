@@ -134,7 +134,7 @@ Two worlds are equal when they have the same kinds, rules and constraints, and t
 | `kind person [ + email: maybe text \| - age ]` | changes a shape |
 | `person harbor [ age: 24 ]` | creates an object |
 | `harbor knows liz` | adds a fact |
-| `harbor [ lives_in: rome \| knows: + marco, - liz ]` | sets values; `+` and `-` add and remove single ones |
+| `harbor [ lives_in: rome \| knows: + robin, - liz ]` | sets values; `+` and `-` add and remove single ones |
 | `- harbor knows liz` · `- harbor knows` · `- harbor` | removes a fact, a relation's values, an object |
 | `each person p where p.age < 18 [ age: p.age + 1 ]` | the same change on every match |
 | `rule adult: person p is adult if p.age >= 18` | a fact that follows |
