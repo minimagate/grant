@@ -19,8 +19,6 @@ fn gcd(a: i128, b: i128) -> i128 {
 }
 
 impl Rat {
-    pub const ZERO: Rat = Rat { n: 0, d: 1 };
-
     pub fn int(n: i128) -> Rat {
         Rat { n, d: 1 }
     }

@@ -39,13 +39,13 @@ fn main() -> ExitCode {
             println!("grant {} (Foundation 1)", env!("CARGO_PKG_VERSION"));
             true
         }
-        ["check", worlds @ ..] if !worlds.is_empty() => worlds.iter().map(|w| check(w)).collect::<Vec<_>>().into_iter().all(|ok| ok),
+        ["check", worlds @ ..] if !worlds.is_empty() => worlds.iter().filter(|world| !check(world)).count() == 0,
         ["show", world] => report(Loader::new().run(&file(world), &mut Vec::new()).map(|world| print!("{}", show::source(&world)))),
         ["watch", world] => watch(world),
         ["repl"] => repl(None),
         ["repl", world] => repl(Some(world)),
-        ["run", world] => run(world),
-        [world] if !world.starts_with('-') && !["run", "check", "show", "watch"].contains(world) => run(world),
+        ["run", world] => run(&mut Loader::new(), &file(world)),
+        [world] if !world.starts_with('-') && !["run", "check", "show", "watch"].contains(world) => run(&mut Loader::new(), &file(world)),
         _ => {
             eprintln!("{HELP}");
             false
@@ -85,15 +85,11 @@ fn print(outputs: &[Output], echo: bool) {
 }
 
 /// Runs a world and shows what it showed, up to its first error if it has one.
-fn run_with(loader: &mut Loader, path: &Path) -> bool {
+fn run(loader: &mut Loader, path: &Path) -> bool {
     let mut shown = Vec::new();
     let result = loader.run(path, &mut shown);
     print(&shown, true);
     report(result)
-}
-
-fn run(world: &str) -> bool {
-    run_with(&mut Loader::new(), &file(world))
 }
 
 fn check(world: &str) -> bool {
@@ -109,11 +105,9 @@ fn watch(world: &str) -> bool {
         if std::io::stdout().is_terminal() {
             print!("\x1b[2J\x1b[H");
         }
-        run_with(&mut loader, &path);
-        let mut files = loader.files().to_vec();
-        if files.is_empty() {
-            files.push(path.clone());
-        }
+        run(&mut loader, &path);
+        // A file that isn't there yet is watched for too.
+        let files = if loader.files().is_empty() { vec![path.clone()] } else { loader.files().to_vec() };
         let before = stamp(&files);
         while stamp(&files) == before {
             std::thread::sleep(Duration::from_millis(250));
