@@ -98,7 +98,7 @@ W = (K, O, F, R)
 - **Identity** is where an object was created: the world that created it and its place in that world's order of creation. It is never written and never seen. It is what makes harbor in one world the same harbor in another.
 - **Vocabulary by name, things by origin.** Kinds, relations, rules and constraints are identified by their names. Objects are identified by their origin. Two objects can share a handle; two kinds can't share a name.
 - **Facts are a set.** Stating the same fact twice is stating it once. Order is lost; only the structure remains.
-- **A fact's value** is an object or a primitive value (`24`, `"Harbor Reed"`).
+- **A fact's value** is an object or a primitive value (`24`, `"Linear Algebra"`).
 - **Derived facts** are not stored. D is everything the rules produce from F, recomputed whenever F or R changes. Questions see F and D together:
 
 ```
@@ -124,7 +124,7 @@ A world without `from numbers` has no numbers.
 | World | Kind | Holds | Example |
 | --- | --- | --- | --- |
 | `numbers` | `number` | exact numbers, `+ - * / div mod`, `< > <= >=` | `24`, `3.5`, `-2` |
-| `text` | `text` | written content, `+` to join, `< > <= >=` (alphabetical) | `"Harbor Reed"` |
+| `text` | `text` | written content, `+` to join, `< > <= >=` (alphabetical) | `"Linear Algebra"` |
 | `id` | `id` | one index per number, related to every object with that number | `id.1` |
 
 Time is not a primitive: a date is a number of days, and a calendar is a world built on `numbers`, using `div` and `mod`.
@@ -223,6 +223,7 @@ harbor knows laurie
 - **A fact is** `subject relation value`. Relations are one word, with `_` between parts: `lives_in`, `is_friends_with`.
 - **Things must exist before they are mentioned.** `harbor lives_in pisa` is an error if `pisa` doesn't exist yet.
 - **Comments** start with `--` and run to the end of the line.
+- **What things share is a thing, not a text.** A name is an object: `name Emmy`, then `noether [ name: Emmy ]`. One person has one name and a name can have many people. A fact is stated from one end; a rule gives the other: `rule bearer: name n person person p if p name n` makes `Emmy.person` everyone called Emmy.
 
 ### Pointing at things
 
@@ -264,7 +265,7 @@ harbor.knows.lives_in      -- pisa, rome
 | `+ - * /`, `( )` | `numbers` | `(harbor.age + 1) * 2` |
 | `div`, `mod` | `numbers` | `17 div 5` → 3, `17 mod 5` → 2 |
 | `< > <= >=` | `numbers`, `text` | `harbor.age >= 18` |
-| `+` (joins) | `text` | `harbor.first + " " + harbor.last` |
+| `+` (joins) | `text` | `linear_algebra.title + " II"` |
 
 `* / div mod` come before `+ -`, then comparisons, then `not`, then `and`, then `or`. Numbers are exact: `1 / 3` stays a third. A `-` at the start of a line removes; anywhere else it is minus.
 

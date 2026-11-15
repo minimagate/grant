@@ -111,14 +111,17 @@ fn values_and_expressions() {
          ? sum harbor.knows.age
          ? max harbor.knows.age
          ? min harbor.knows.age
-         ? \"Harbor\" + \" \" + \"Reed\"
+         ? \"Linear\" + \" \" + \"Algebra\"
          ? harbor.feels
          ? count (person p lives_in pisa)
          ? harbor.age - 30
          ? 3.5 + 0.25
          ? \"alice\" < \"Zed\"",
     ));
-    assert_eq!(shown, ["pisa, rome", "50", "3", "2", "1/3", "2", "57", "30", "27", "\"Harbor Reed\"", "nothing", "2", "-6", "3.75", "yes"]);
+    assert_eq!(
+        shown,
+        ["pisa, rome", "50", "3", "2", "1/3", "2", "57", "30", "27", "\"Linear Algebra\"", "nothing", "2", "-6", "3.75", "yes"]
+    );
 }
 
 #[test]
