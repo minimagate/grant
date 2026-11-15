@@ -99,7 +99,7 @@ pub enum Dispute {
     Never(Sym),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct World {
     pub id: u32,
     pub name: Sym,
@@ -132,22 +132,7 @@ pub fn next_id() -> u32 {
 impl World {
     /// The empty world: nothing but the kind `world`.
     pub fn new(id: u32, name: &str) -> World {
-        World {
-            id,
-            name: name.into(),
-            kinds: BTreeMap::from([("world".into(), Shape::new())]),
-            objects: BTreeMap::new(),
-            facts: Facts::default(),
-            rules: BTreeMap::new(),
-            nevers: BTreeMap::new(),
-            disputes: BTreeMap::new(),
-            by_handle: BTreeMap::new(),
-            by_kind: BTreeMap::new(),
-            indexes: BTreeMap::new(),
-            created: 0,
-            removed: BTreeMap::new(),
-            model: OnceCell::new(),
-        }
+        World { id, name: name.into(), kinds: BTreeMap::from([("world".into(), Shape::new())]), ..World::default() }
     }
 
     /// The union of the parents: everything any of them has. What they disagree on is recorded

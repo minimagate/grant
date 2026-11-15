@@ -109,26 +109,23 @@ fn compare(a: &World, b: &World) -> bool {
     let (mut ga, mut gb) = (Graph::new(a), Graph::new(b));
     ga.refine();
     gb.refine();
-    let (mut ca, mut cb) = (ga.colour.clone(), gb.colour.clone());
-    ca.sort();
-    cb.sort();
-    if ca != cb {
+    let sorted = |g: &Graph| {
+        let mut colours = g.colour.clone();
+        colours.sort();
+        colours
+    };
+    if sorted(&ga) != sorted(&gb) {
         return false;
     }
     let n = ga.ids.len();
     let mut matching = Matching { a: &ga, b: &gb, to: vec![None; n], taken: vec![false; n] };
     for (x, y) in forced {
-        let (i, j) = match (ga.ids.iter().position(|id| *id == x), gb.ids.iter().position(|id| *id == y)) {
-            (Some(i), Some(j)) => (i, j),
+        match (ga.ids.binary_search(&x), gb.ids.binary_search(&y)) {
+            (Ok(i), Ok(j)) if matching.to[i] == Some(j) => {}
+            (Ok(i), Ok(j)) if matching.to[i].is_none() && !matching.taken[j] && matching.fits(i, j) => matching.pair(i, j, true),
             // Both rules name an object since removed: nothing to match.
-            (None, None) => continue,
+            (Err(_), Err(_)) => {}
             _ => return false,
-        };
-        match matching.to[i] {
-            Some(already) if already != j => return false,
-            Some(_) => {}
-            None if matching.taken[j] || !matching.fits(i, j) => return false,
-            None => matching.pair(i, Some(j)),
         }
     }
     // Objects that fewer others look like go first: they leave the least to try.
@@ -147,13 +144,10 @@ struct Matching<'g, 'w> {
 }
 
 impl Matching<'_, '_> {
-    fn pair(&mut self, i: usize, j: Option<usize>) {
-        if let Some(old) = std::mem::replace(&mut self.to[i], j) {
-            self.taken[old] = false;
-        }
-        if let Some(j) = j {
-            self.taken[j] = true;
-        }
+    /// Matches object `i` of `a` with object `j` of `b`, or undoes that.
+    fn pair(&mut self, i: usize, j: usize, on: bool) {
+        self.to[i] = on.then_some(j);
+        self.taken[j] = on;
     }
 
     /// Whether object `i` of `a` can be object `j` of `b`, given the matches made so far.
@@ -178,11 +172,11 @@ impl Matching<'_, '_> {
         let Some((&i, rest)) = order.split_first() else { return true };
         for j in 0..self.taken.len() {
             if !self.taken[j] && self.fits(i, j) {
-                self.pair(i, Some(j));
+                self.pair(i, j, true);
                 if self.search(rest) {
                     return true;
                 }
-                self.pair(i, None);
+                self.pair(i, j, false);
             }
         }
         false

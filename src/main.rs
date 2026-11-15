@@ -42,8 +42,7 @@ fn main() -> ExitCode {
         ["check", worlds @ ..] if !worlds.is_empty() => worlds.iter().filter(|world| !check(world)).count() == 0,
         ["show", world] => report(Loader::new().run(&file(world), &mut Vec::new()).map(|world| print!("{}", show::source(&world)))),
         ["watch", world] => watch(world),
-        ["repl"] => repl(None),
-        ["repl", world] => repl(Some(world)),
+        ["repl", parent @ ..] if parent.len() < 2 => repl(parent.first().copied()),
         ["run", world] => run(&mut Loader::new(), &file(world)),
         [world] if !world.starts_with('-') && !["run", "check", "show", "watch"].contains(world) => run(&mut Loader::new(), &file(world)),
         _ => {

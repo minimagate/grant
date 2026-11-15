@@ -60,8 +60,9 @@ impl<'w> Compiler<'w> {
         CExpr::Obj(self.objects.len() - 1)
     }
 
-    /// Steps into `in w:`. A named world is looked into alone; a variable may be any held world.
-    fn enter(&mut self, world: &Expr) {
+    /// Compiles what is inside `in w:`. A named world is looked into alone; a variable may be any
+    /// held world.
+    fn within<T>(&mut self, world: &Expr, body: impl FnOnce(&mut Self) -> Res<T>) -> Res<T> {
         let pick = |from: &World| -> (Vec<Rc<World>>, bool) {
             let named = match world {
                 Expr::Name(name) if self.slot(name).is_none() => match from.find(name).as_slice() {
@@ -84,6 +85,9 @@ impl<'w> Compiler<'w> {
             }
         };
         self.inside.push(next);
+        let result = body(self);
+        self.inside.pop();
+        result
     }
 
     fn declare(&mut self, kind: &Sym, var: &Sym, fresh: &mut Vec<usize>) -> Res<()> {
@@ -122,12 +126,7 @@ impl<'w> Compiler<'w> {
     fn introduce(&mut self, cond: &Cond, fresh: &mut Vec<usize>) -> Res<()> {
         match cond {
             Cond::And(cs) | Cond::Or(cs) => cs.iter().try_for_each(|c| self.introduce(c, fresh))?,
-            Cond::In(world, body) => {
-                self.enter(world);
-                let result = self.introduce(body, fresh);
-                self.inside.pop();
-                result?;
-            }
+            Cond::In(world, body) => self.within(world, |c| c.introduce(body, fresh))?,
             Cond::Any(kind, var) => self.declare(kind, var, fresh)?,
             Cond::Pattern { subj, val, .. } => {
                 for term in [subj, val] {
@@ -159,13 +158,7 @@ impl<'w> Compiler<'w> {
             Cond::And(cs) => CCond::And(cs.iter().map(|c| self.cond(c)).collect::<Res<_>>()?),
             Cond::Or(cs) => CCond::Or(cs.iter().map(|c| self.cond(c)).collect::<Res<_>>()?),
             Cond::Not(inner) => CCond::Not(Box::new(self.scope(inner)?)),
-            Cond::In(world, body) => {
-                let looked_into = self.expr(world)?;
-                self.enter(world);
-                let body = self.cond(body);
-                self.inside.pop();
-                CCond::In(looked_into, Box::new(body?))
-            }
+            Cond::In(world, body) => CCond::In(self.expr(world)?, Box::new(self.within(world, |c| c.cond(body))?)),
             Cond::Any(_, var) => CCond::Any(self.introduced(var)?),
             Cond::Pattern { subj, rel, val } => {
                 let subj = self.term(subj)?;
@@ -257,13 +250,7 @@ impl<'w> Compiler<'w> {
             Expr::Bin(op, l, r) => CExpr::Bin(op, Box::new(self.expr(l)?), Box::new(self.expr(r)?)),
             Expr::Agg(op, e) => CExpr::Agg(op, Box::new(self.expr(e)?)),
             Expr::Count(cond) => CExpr::Count(Box::new(self.scope(cond)?)),
-            Expr::In(world, body) => {
-                let looked_into = self.expr(world)?;
-                self.enter(world);
-                let body = self.expr(body);
-                self.inside.pop();
-                CExpr::In(Box::new(looked_into), Box::new(body?))
-            }
+            Expr::In(world, body) => CExpr::In(Box::new(self.expr(world)?), Box::new(self.within(world, |c| c.expr(body))?)),
         })
     }
 

@@ -23,7 +23,7 @@ pub struct Output {
     pub text: String,
 }
 
-/// A world being stated, line by line. It has no identity until its first line is run.
+/// A world being stated, line by line. It has no identity until a line of it runs.
 #[derive(Clone)]
 pub struct Session {
     pub world: World,
@@ -31,20 +31,9 @@ pub struct Session {
     file: Option<PathBuf>,
 }
 
-/// One bracket entry, ready to compute: `rel: values`.
-struct Plan {
-    rel: Sym,
-    change: Change,
-    values: Vec<CExpr>,
-}
-
-/// What a plan does to one subject.
-struct Edit {
-    subj: ObjId,
-    rel: Sym,
-    change: Change,
-    values: Vec<Value>,
-}
+/// A bracket entry ready to compute, and what it then does to one subject.
+type Plan = Assign<CExpr>;
+type Edit = (ObjId, Assign<Value>);
 
 impl Session {
     /// Starts an empty world. `dir` is where the names of other worlds resolve from.
@@ -139,14 +128,10 @@ impl Session {
                 let never = compile::never(&self.world, &name, &one_line(&line.text), &kind, &var, &cond)?;
                 self.world.set_never(&name, Some(never));
             }
-            Stmt::RemoveRule(name) => {
-                if !self.world.set_rule(&name, None) {
-                    said.push(format!("nothing removed: there is no rule `{name}`"));
-                }
-            }
-            Stmt::RemoveNever(name) => {
-                if !self.world.set_never(&name, None) {
-                    said.push(format!("nothing removed: there is no never `{name}`"));
+            Stmt::Forget(what, name) => {
+                let found = if what == "rule" { self.world.set_rule(&name, None) } else { self.world.set_never(&name, None) };
+                if !found {
+                    said.push(format!("nothing removed: there is no {what} `{name}`"));
                 }
             }
             Stmt::Ask(cond) => said.push(self.ask(&cond)?),
@@ -194,7 +179,7 @@ impl Session {
         for Assign { rel, change, values } in assigns {
             c.world.relation(kind, rel)?;
             let values = values.iter().map(|e| c.expr(e)).collect::<Res<_>>()?;
-            plans.push(Plan { rel: rel.clone(), change: *change, values });
+            plans.push(Assign { rel: rel.clone(), change: *change, values });
         }
         Ok(plans)
     }
@@ -211,7 +196,7 @@ impl Session {
             if plan.change != Change::Remove {
                 values.iter().try_for_each(|v| self.world.check_value(kind, &plan.rel, v))?;
             }
-            edits.push(Edit { subj, rel: plan.rel.clone(), change: plan.change, values });
+            edits.push((subj, Assign { rel: plan.rel.clone(), change: plan.change, values }));
         }
         Ok(edits)
     }
@@ -219,14 +204,14 @@ impl Session {
     /// Applies computed edits. Everything a set replaces goes first, so sets on the same
     /// relation add up.
     fn apply(&mut self, edits: Vec<Edit>) {
-        for edit in edits.iter().filter(|e| e.change == Change::Set) {
-            self.world.clear(edit.subj, &edit.rel);
+        for (subj, edit) in edits.iter().filter(|(_, e)| e.change == Change::Set) {
+            self.world.clear(*subj, &edit.rel);
         }
-        for edit in edits {
+        for (subj, edit) in edits {
             for value in edit.values {
                 match edit.change {
-                    Change::Remove => drop(self.world.unstate(edit.subj, &edit.rel, &value)),
-                    _ => self.world.state(edit.subj, &edit.rel, value),
+                    Change::Remove => drop(self.world.unstate(subj, &edit.rel, &value)),
+                    _ => self.world.state(subj, &edit.rel, value),
                 }
             }
         }
@@ -388,7 +373,7 @@ impl Session {
         let subj = c.open(&[(kind, var)], cond)?[0];
         let cond = c.cond(cond)?;
         // `None` removes the objects themselves.
-        let one = |rel: &Sym, change, values| Some(vec![Plan { rel: rel.clone(), change, values }]);
+        let one = |rel: &Sym, change, values| Some(vec![Assign { rel: rel.clone(), change, values }]);
         let plans = match action {
             EachAction::Set(assigns) => Some(Self::plan(&mut c, kind, assigns)?),
             EachAction::Fact(rel, value) => {
@@ -426,7 +411,7 @@ impl Session {
         }
         doomed.into_iter().for_each(|id| self.remove_object(id, said));
         let emptied: BTreeSet<(ObjId, Sym)> = match action {
-            EachAction::RemoveRel(..) => edits.iter().map(|e| (e.subj, e.rel.clone())).collect(),
+            EachAction::RemoveRel(..) => edits.iter().map(|(subj, e)| (*subj, e.rel.clone())).collect(),
             _ => BTreeSet::new(),
         };
         self.apply(edits);

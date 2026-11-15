@@ -79,12 +79,12 @@ pub enum Change {
     Remove,
 }
 
-/// One bracket entry. `r: + a, - b` is two.
+/// One bracket entry, with its values as written or as they later become. `r: + a, - b` is two.
 #[derive(Clone, Debug)]
-pub struct Assign {
+pub struct Assign<V = Expr> {
     pub rel: Sym,
     pub change: Change,
-    pub values: Vec<Expr>,
+    pub values: Vec<V>,
 }
 
 /// How many values a relation holds.
@@ -188,8 +188,8 @@ pub enum Stmt {
         var: Sym,
         cond: Cond,
     },
-    RemoveRule(Sym),
-    RemoveNever(Sym),
+    /// `- rule name` or `- never name`
+    Forget(&'static str, Sym),
     Ask(Cond),
     /// A line that tries to change a held world from outside.
     InChange(Sym),

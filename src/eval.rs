@@ -22,33 +22,19 @@ impl<'a> View<'a> {
         Ok(View { world, facts: &world.model()?.facts })
     }
 
-    /// An object's index, which every object has in a world built `from id`.
-    fn index(&self, subj: ObjId) -> Option<Value> {
-        let object = self.world.objects.get(&subj).filter(|_| self.world.kinds.contains_key("id"))?;
-        Some(count(object.index as usize))
-    }
-
-    /// The values of a relation of a subject. `id` is its index.
+    /// The values of a relation of a subject. `.id` is its index, in a world built `from id`.
     fn values(&self, subj: ObjId, rel: &str) -> Vec<Value> {
-        if rel == "id" { self.index(subj).into_iter().collect() } else { self.facts.values(subj, rel).cloned().collect() }
-    }
-
-    fn pairs(&self, rel: &str) -> Vec<(ObjId, Value)> {
-        if rel == "id" {
-            return self.world.objects.keys().filter_map(|id| Some((*id, self.index(*id)?))).collect();
+        if rel != "id" {
+            return self.facts.values(subj, rel).cloned().collect();
         }
-        self.facts.pairs(rel).map(|(s, v)| (s, v.clone())).collect()
+        let object = self.world.objects.get(&subj).filter(|_| self.world.kinds.contains_key("id"));
+        object.map(|o| count(o.index as usize)).into_iter().collect()
     }
 
-    fn subjects(&self, rel: &str, value: &Value) -> Vec<ObjId> {
-        if rel == "id" {
-            return self.pairs(rel).into_iter().filter(|(_, index)| index == value).map(|(id, _)| id).collect();
-        }
-        self.facts.subjects(rel, value).collect()
-    }
-
-    pub fn has(&self, subj: ObjId, rel: &str, value: &Value) -> bool {
-        if rel == "id" { self.index(subj).as_ref() == Some(value) } else { self.facts.contains(subj, rel, value) }
+    /// Every object with this index: what `id.3` stands for.
+    fn numbered(&self, index: u64) -> Vec<Value> {
+        let all = self.world.objects.iter().filter(|(_, o)| o.index == index && self.world.kinds.contains_key("id"));
+        all.map(|(id, _)| Value::Obj(*id)).collect()
     }
 
     /// The world a value is, to look inside it.
@@ -193,7 +179,7 @@ impl Eval<'_> {
             (None, None) => {
                 let subjects = self.expr(subj, env, view, false)?;
                 let values = self.expr(val, env, view, false)?;
-                let holds = subjects.iter().any(|s| matches!(s, Value::Obj(id) if values.iter().any(|v| view.has(*id, rel, v))));
+                let holds = subjects.iter().any(|s| matches!(s, Value::Obj(id) if values.iter().any(|v| view.facts.contains(*id, rel, v))));
                 if holds { next(env) } else { Ok(true) }
             }
             (None, Some(slot)) => {
@@ -207,13 +193,13 @@ impl Eval<'_> {
             (Some(slot), None) => {
                 let mut found = BTreeSet::new();
                 for value in self.expr(val, env, view, false)? {
-                    found.extend(view.subjects(rel, &value).into_iter().map(Value::Obj).filter(|s| self.fits(slot, s, view)));
+                    found.extend(view.facts.subjects(rel, &value).map(Value::Obj).filter(|s| self.fits(slot, s, view)));
                 }
                 self.bind(slot, found, env, next)
             }
             (Some(s), Some(v)) => {
-                for (subject, value) in view.pairs(rel) {
-                    let subject = Value::Obj(subject);
+                for (subject, value) in view.facts.pairs(rel) {
+                    let (subject, value) = (Value::Obj(subject), value.clone());
                     if (s == v && subject != value) || !self.fits(s, &subject, view) || !self.fits(v, &value, view) {
                         continue;
                     }
@@ -244,7 +230,7 @@ impl Eval<'_> {
                 several => return Err(format!("{} objects called {handle} in {}; use `the`", several.len(), view.world.name)),
             },
             CExpr::The(the) => vec![Value::Obj(self.the(the, env, view)?)],
-            CExpr::Index(index) => view.subjects("id", &count(*index as usize)).into_iter().map(Value::Obj).collect(),
+            CExpr::Index(index) => view.numbered(*index),
             CExpr::Dot(base, rel) => {
                 let mut values = Vec::new();
                 for subject in self.expr(base, env, view, strict)? {
@@ -353,7 +339,7 @@ impl Eval<'_> {
             for (rel, described) in &the.desc {
                 for e in described {
                     let values = self.expr(e, env, view, false)?;
-                    if values.is_empty() || !values.iter().all(|v| view.has(id, rel, v)) {
+                    if values.is_empty() || !values.iter().all(|v| view.facts.contains(id, rel, v)) {
                         continue 'candidates;
                     }
                 }

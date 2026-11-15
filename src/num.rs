@@ -117,26 +117,16 @@ impl fmt::Display for Rat {
         if self.d == 1 {
             return write!(f, "{}", self.n);
         }
-        let mut rest = self.d;
-        while rest % 2 == 0 {
-            rest /= 2;
-        }
-        while rest % 5 == 0 {
-            rest /= 5;
-        }
+        // A decimal that ends does so within 127 digits, the most a denominator can ask for.
         let (n, d) = (self.n.unsigned_abs(), self.d.unsigned_abs());
         let mut digits = String::new();
         let mut rem = n % d;
-        while rest == 1 && rem != 0 {
+        while rem != 0 && digits.len() < 127 {
             let Some(scaled) = rem.checked_mul(10) else { break };
             digits.push(char::from_digit((scaled / d) as u32, 10).unwrap());
             rem = scaled % d;
         }
-        if rest == 1 && rem == 0 {
-            write!(f, "{}{}.{}", if self.n < 0 { "-" } else { "" }, n / d, digits)
-        } else {
-            write!(f, "{}/{}", self.n, self.d)
-        }
+        if rem == 0 { write!(f, "{}{}.{}", if self.n < 0 { "-" } else { "" }, n / d, digits) } else { write!(f, "{}/{}", self.n, self.d) }
     }
 }
 

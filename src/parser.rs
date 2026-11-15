@@ -255,10 +255,8 @@ impl Parser<'_> {
     fn removal(&mut self) -> Res<Stmt> {
         if self.eat("kind") {
             Ok(Stmt::RemoveKind(self.name("a kind")?))
-        } else if self.eat("rule") {
-            Ok(Stmt::RemoveRule(self.name("a rule's name")?))
-        } else if self.eat("never") {
-            Ok(Stmt::RemoveNever(self.name("a constraint's name")?))
+        } else if let Some(what) = self.any(&["rule", "never"]) {
+            Ok(Stmt::Forget(what, self.name(if what == "rule" { "a rule's name" } else { "a constraint's name" })?))
         } else if self.eat("each") {
             self.each(true)
         } else {
@@ -545,7 +543,7 @@ mod tests {
         assert!(matches!(stmt("person harbor [ age: 24 | knows: liz, laurie ]"), Ok(Stmt::Create { .. })));
         assert!(matches!(stmt("harbor knows liz"), Ok(Stmt::Fact { .. })));
         assert!(matches!(stmt("+ harbor age -2"), Ok(Stmt::Fact { value: Expr::Neg(_), .. })));
-        assert!(matches!(stmt("harbor [ knows: + marco, - liz ]"), Ok(Stmt::Set { .. })));
+        assert!(matches!(stmt("harbor [ knows: + robin, - liz ]"), Ok(Stmt::Set { .. })));
         assert!(matches!(stmt("- harbor knows"), Ok(Stmt::Remove { rel: Some(_), value: None, .. })));
         assert!(matches!(stmt("world towns/town_a"), Ok(Stmt::Create { path: Some(_), .. })));
         assert!(matches!(stmt("the harbor [ lives_in: rome ] knows liz"), Ok(Stmt::Fact { subj: Expr::The(_), .. })));
