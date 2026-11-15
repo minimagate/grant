@@ -89,4 +89,4 @@ For `date today [ days: 20771 ]` the questions show 2026, 11, 14 and saturday.
 
 ## `department/`
 
-A mathematics department plans its teaching, in ten worlds: vocabulary, catalogue, campus, people, their union, two timetables, their merge, a review that holds the plans as objects, and the following year. See [its README](department).
+A mathematics department plans its teaching, in eleven worlds: vocabulary, names, catalogue, campus, people, their union, two timetables, their merge, a review that holds the plans as objects, and the following year. See [its README](department).
