@@ -3,25 +3,25 @@ from numbers, text
 kind weekday [
   number:  one number
 ]
-weekday thursday [
+weekday monday [
   number:  0
 ]
-weekday friday [
+weekday tuesday [
   number:  1
 ]
-weekday saturday [
+weekday wednesday [
   number:  2
 ]
-weekday sunday [
+weekday thursday [
   number:  3
 ]
-weekday monday [
+weekday friday [
   number:  4
 ]
-weekday tuesday [
+weekday saturday [
   number:  5
 ]
-weekday wednesday [
+weekday sunday [
   number:  6
 ]
 
@@ -38,7 +38,7 @@ kind date [
   year:    one number
 ]
 
-rule falls: date d falls weekday w if w.number = d.days mod 7
+rule falls: date d falls weekday w if w.number = (d.days + 3) mod 7
 rule era:   date d era (d.days + 719468) div 146097
 rule doe:   date d doe (d.days + 719468) mod 146097
 rule yoe:   date d yoe (d.doe - d.doe div 1460 + d.doe div 36524 - d.doe div 146096) div 365

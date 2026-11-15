@@ -83,7 +83,7 @@ Worlds as objects. It holds `move_rome`, `move_florence` and `town` with `world`
 
 Time is not a primitive. A date is a number of days, and a calendar is a world built on `numbers` with `div` and `mod`.
 
-A `date` states one thing, `days` (days since 1 January 1970). Nine rules derive the rest: the weekday from `days mod 7`, then the era, the day and year within the era, and from those the day, month and year. The rules chain: `year` reads `month`, which reads `mp`, which reads `doy`, and so on back to `days`.
+A `date` states one thing, `days` (days since 1 January 1970). Nine rules derive the rest: the weekday from `(days + 3) mod 7` (day 0 was a Thursday, and the 3 makes Monday 0), then the era, the day and year within the era, and from those the day, month and year. The rules chain: `year` reads `month`, which reads `mp`, which reads `doy`, and so on back to `days`.
 
 For `date today [ days: 20771 ]` the questions show 2026, 11, 14 and saturday.
 
