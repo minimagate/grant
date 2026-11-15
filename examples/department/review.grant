@@ -1,0 +1,42 @@
+-- review: the plans as things. This world holds them, relates them, and judges them.
+--
+-- A plan can't be changed from here; it can only be looked into with `in`.
+
+from numbers
+
+world plan_morning
+world plan_spread
+world plan_merged
+
+kind verdict
+verdict best
+
+kind world [
+  + clashes_less_than:  world
+  + spares_more_than:   world
+  + is:                 verdict
+]
+
+rule clashes: world a clashes_less_than world b if
+  count (in a: person s clashes_on slot k) < count (in b: person s clashes_on slot k)
+
+rule spares: world a spares_more_than world b if
+  count (in a: person t is overloaded) < count (in b: person t is overloaded)
+
+-- The best plan is one no other plan beats on either count.
+rule best: world w is best if
+  not world v clashes_less_than w and not world u spares_more_than w
+
+? world a clashes_less_than world b
+? world a spares_more_than world b
+? world w is best
+
+? in plan_morning: person s clashes_on slot k
+? in plan_spread: cauchy.load
+
+-- The same riemann, by origin, in two worlds: what changed for him?
+? (in plan_morning: riemann is overloaded) and not (in plan_merged: riemann is overloaded)
+
+-- Equality compares shape. The merged plan has the hours of plan_spread, but not its rule.
+? plan_merged = plan_spread
+? plan_merged = plan_merged

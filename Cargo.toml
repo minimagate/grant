@@ -1,0 +1,19 @@
+[package]
+name = "grant"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Grant: a language for describing worlds and changing them (Foundation 1)"
+authors = ["Michelangelo Gubinelli"]
+readme = "README.md"
+repository = "https://github.com/minimagate/grant"
+homepage = "https://minimagate.github.io/grant-homepage/"
+keywords = ["language", "interpreter", "logic", "datalog", "worlds"]
+categories = ["compilers", "command-line-utilities"]
+publish = false
+
+[dependencies]
+
+[profile.release]
+lto = true
+codegen-units = 1

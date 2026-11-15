@@ -1,0 +1,35 @@
+-- vocabulary: the words every world of the department shares.
+-- Nothing exists here yet: only the kinds of things and the relations they can have.
+
+from numbers, text
+
+kind area
+kind role
+kind room [ seats: one number ]
+kind slot [
+  day:   one number        -- 1 is Monday
+  hour:  one number
+  is:    role              -- a flag: afternoon
+]
+
+kind course [
+  title:     one text
+  credits:   one number
+  area:      one area
+  requires:  course        -- stated: what must be passed first
+  needs:     course        -- derived: everything that must be passed first
+]
+
+kind person [
+  name:       one text
+  is:         some role
+  can_teach:  area
+  passed:     course
+  wants:      course
+]
+
+role lecturer
+role student
+role afternoon
+
+rule afternoon: slot s is afternoon if s.hour >= 14

@@ -1,0 +1,19 @@
+-- plan_morning: everything before lunch.
+
+from department
+
+linear_algebra        [ taught_by: noether | meets_in: aula_magna | meets_at: mon_9 ]
+analysis_1            [ taught_by: cauchy  | meets_in: aula_magna | meets_at: tue_9 ]
+analysis_2            [ taught_by: riemann | meets_in: aula_b     | meets_at: mon_9 ]
+group_theory          [ taught_by: noether | meets_in: aula_b     | meets_at: tue_9 ]
+topology              [ taught_by: riemann | meets_in: aula_b     | meets_at: wed_9 ]
+logic_1               [ taught_by: godel   | meets_in: seminar    | meets_at: mon_11 ]
+galois_theory         [ taught_by: noether | meets_in: seminar    | meets_at: wed_9 ]
+differential_geometry [ taught_by: riemann | meets_in: seminar    | meets_at: tue_11 ]
+
+never untaught: course c where c.demand > 0 and not c taught_by person t
+rule overloaded: person t is overloaded if t.load > 24
+
+? person s clashes_on slot k
+? person t is overloaded
+? riemann.load

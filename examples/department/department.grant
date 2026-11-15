@@ -1,0 +1,45 @@
+-- department: the three worlds together, and what follows once they meet.
+--
+-- catalogue, people and campus are all built on vocabulary, so their kinds are the same
+-- kinds and the union is one world. Order doesn't matter.
+
+from campus, people, catalogue
+
+kind person [
+  + may_take:    course      -- derived
+  + teaches:     course      -- derived
+  + load:        maybe number
+  + clashes_on:  slot        -- derived
+]
+kind course [
+  + taught_by:  maybe person
+  + meets_in:   maybe room
+  + meets_at:   maybe slot
+  + demand:     one number   -- derived
+]
+
+-- A student may take a course they want once nothing it needs is left to pass.
+role overloaded      -- a flag the plans give to lecturers; each plan says what it means
+
+rule may_take: person s may_take course c if
+  s wants c and not (c needs course p and not s passed p)
+
+rule demand:  course c demand count (person s may_take c)
+rule teaches: person t teaches course c if c taught_by t
+rule load:    person t load sum t.teaches.credits if t is lecturer
+
+-- Two courses a student may take, at the same hour.
+rule clash: person s clashes_on slot k if
+  s may_take course c and s may_take course d and c != d and c meets_at k and d meets_at k
+
+-- What a timetable must never do. These are checked when a world ends, so a plan can be
+-- written in any order and pass through broken states on the way.
+never unqualified: course c where c taught_by person t and not t can_teach c.area
+never room_taken:  course c where course d meets_in c.meets_in and d meets_at c.meets_at and d != c
+never two_places:  person t where
+  course c taught_by t and course d taught_by t and c != d and c.meets_at = d.meets_at
+never too_small:   course c where c.meets_in.seats < c.demand
+
+
+? person s wants course c and not s may_take c     -- who is held back, and from what
+? course c and c.demand = 0                         -- wanted by nobody who is ready

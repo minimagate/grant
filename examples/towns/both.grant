@@ -1,0 +1,7 @@
+-- both
+from move_rome, move_florence
+-- harbor lives_in rome and florence here: one city would fail at the end
+
+? harbor.lives_in             -- rome, florence
+harbor [ lives_in: rome ]
+? harbor.lives_in             -- rome

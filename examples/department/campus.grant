@@ -1,0 +1,18 @@
+-- campus: the rooms, and the hours of the week in which teaching happens.
+
+from vocabulary
+
+room aula_magna [ seats: 120 ]
+room aula_b     [ seats: 40 ]
+room seminar    [ seats: 3 ]
+
+slot mon_9  [ day: 1 | hour: 9 ]
+slot mon_11 [ day: 1 | hour: 11 ]
+slot mon_14 [ day: 1 | hour: 14 ]
+slot tue_9  [ day: 2 | hour: 9 ]
+slot tue_11 [ day: 2 | hour: 11 ]
+slot tue_14 [ day: 2 | hour: 14 ]
+slot wed_9  [ day: 3 | hour: 9 ]
+slot wed_11 [ day: 3 | hour: 11 ]
+
+? slot s is afternoon

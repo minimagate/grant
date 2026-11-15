@@ -1,0 +1,3 @@
+-- move_florence
+from town
+harbor [ lives_in: florence ]

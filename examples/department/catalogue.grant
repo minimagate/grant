@@ -1,0 +1,32 @@
+-- catalogue: the courses, and what each requires.
+
+from vocabulary
+
+area algebra
+area analysis
+area geometry
+area logic
+
+course linear_algebra [ title: "Linear Algebra" | credits: 9  | area: algebra ]
+course analysis_1     [ title: "Analysis I"     | credits: 12 | area: analysis ]
+course logic_1        [ title: "Logic"          | credits: 6  | area: logic ]
+course analysis_2     [ title: "Analysis II"    | credits: 12 | area: analysis | requires: analysis_1 ]
+course group_theory   [ title: "Group Theory"   | credits: 6  | area: algebra  | requires: linear_algebra ]
+course topology       [ title: "Topology"       | credits: 9  | area: geometry | requires: analysis_1 ]
+course galois_theory  [ title: "Galois Theory"  | credits: 6  | area: algebra  | requires: group_theory ]
+course differential_geometry [
+  title:     "Differential Geometry"
+  credits:   9
+  area:      geometry
+  requires:  topology, analysis_2, linear_algebra
+]
+
+-- What a course needs is what it requires, and what those need in turn.
+rule needs: course c needs course p if c requires p or (c requires course q and q needs p)
+
+-- No course may stand, however far back, behind itself.
+never circular: course c where c needs c
+
+? differential_geometry.needs
+? course c and not c requires course p        -- where a first-year student can start
+? sum galois_theory.needs.credits             -- credits to earn before Galois Theory

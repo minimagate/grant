@@ -1,0 +1,23 @@
+-- plan_merged: both proposals at once, and then a decision.
+--
+-- The world starts as the union of its parents. Every course is the same course in both
+-- (same origin), so it carries the facts of both: two hours, sometimes two lecturers.
+-- Nothing fails here. What doesn't fit is settled by stating what is true.
+
+from plan_morning, plan_spread
+
+? course c and count c.meets_at > 1       -- where the two plans disagree
+? analysis_2.taught_by
+
+analysis_2            [ taught_by: cauchy | meets_at: mon_14 ]
+group_theory          [ meets_at: tue_11 ]
+galois_theory         [ meets_at: wed_11 ]
+differential_geometry [ meets_at: tue_14 ]
+
+-- The parents also define `overloaded` two ways. Until it is restated it produces nothing.
+? person t is overloaded
+rule overloaded: person t is overloaded if t.load > 24
+? person t is overloaded
+
+? person s clashes_on slot k
+? person t load number n and t is lecturer

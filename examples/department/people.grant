@@ -1,0 +1,38 @@
+-- people: who teaches, who studies, and what the students have passed and want.
+
+from vocabulary, catalogue
+
+person noether [ name: "Emmy"     | is: lecturer | can_teach: algebra, logic ]
+person cauchy  [ name: "Augustin" | is: lecturer | can_teach: analysis ]
+person riemann [ name: "Bernhard" | is: lecturer | can_teach: geometry, analysis ]
+person godel   [ name: "Kurt"     | is: lecturer | can_teach: logic ]
+
+person ada [
+  name:   "Ada"
+  is:     student
+  wants:  linear_algebra, analysis_1, logic_1
+]
+person bruno [
+  name:    "Bruno"
+  is:      student
+  passed:  linear_algebra, analysis_1
+  wants:   analysis_2, group_theory, topology
+]
+person chiara [
+  name:    "Chiara"
+  is:      student
+  passed:  linear_algebra, analysis_1, analysis_2, topology
+  wants:   differential_geometry, group_theory, logic_1
+]
+person dario [
+  name:    "Dario"
+  is:      student
+  passed:  linear_algebra
+  wants:   galois_theory, group_theory, analysis_1
+]
+person elena [
+  name:    "Elena"
+  is:      student
+  passed:  linear_algebra, group_theory, analysis_1
+  wants:   galois_theory, topology, analysis_2
+]

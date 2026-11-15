@@ -1,0 +1,19 @@
+-- compare: worlds as objects
+from numbers
+
+world towns/move_rome
+world towns/move_florence
+world towns/town
+
+kind world [ + is_happier_than: world ]
+
+rule happier: world a is_happier_than world b if
+  count (in a: person p feels happy) > count (in b: person p feels happy)
+
+? move_rome is_happier_than move_florence
+? world w is_happier_than town
+? in move_rome: harbor.lives_in
+? in town: person p feels happy
+? move_rome = move_florence
+? town = town
+? (in move_rome: harbor feels happy) and not (in town: harbor feels happy)

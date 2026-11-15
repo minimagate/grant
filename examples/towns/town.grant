@@ -1,0 +1,13 @@
+-- town
+from numbers, text
+
+kind city
+kind feeling
+kind person [ age: one number | lives_in: one city | feels: feeling | knows: person ]
+
+city pisa
+city rome
+city florence
+feeling happy
+person harbor [ age: 24 | lives_in: pisa ]
+person liz    [ age: 27 | lives_in: pisa | feels: happy ]
