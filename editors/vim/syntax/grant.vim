@@ -22,6 +22,10 @@ syn match   grantComment   "--.*$" contains=@Spell
 syn match   grantAsk       "^\s*?"
 syn match   grantRelation  "\%(\<in\s\+\)\@<!\<\h\w*\ze\s*:"
 syn match   grantRelation  "\.\@1<=\h\w*"
+" What a bracket entry holds, after its `:`. Objects are left plain there, so the relations
+" stand out. The `:` after a rule's name or after `in w` starts no entry.
+syn region  grantValues    matchgroup=grantDelimiter oneline contains=ALLBUT,grantObjectName
+      \ start="\%(^\s*\%(-\s*\)\?\%(rule\|never\)\s\+\h\w*\s*\)\@<!\%(\<in\s\+\h\w*\s*\)\@<!:" end="\ze[|\]]" end="$"
 syn match   grantKind      "\%(^\s*\%(-\s*\)\?kind\s\+\)\@<=\h\w*"
 
 " Reads the lines of a world, then the worlds it names with `from` or `world`.
