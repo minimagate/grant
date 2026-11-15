@@ -14,6 +14,12 @@ kind person [
   is_neighbour_of:  person
   can_reach:        person
 ]
+kind city [
+  home_of:  person by lives_in
+]
+kind number [
+  aged:  person by age
+]
 
 city york
 city bath
@@ -56,6 +62,8 @@ never sensible_age: person p where p.age < 0 or p.age > 150
 ? sum harbor.knows.age / count harbor.knows
 ? liz can_reach laurie
 ? person p is lonely
+? 24.aged
+? york.home_of
 
 harbor [
   lives_in:  bath
@@ -66,5 +74,6 @@ harbor [
 
 ? harbor is_at peace
 ? harbor.age
+? 25.aged
 ? person p is_neighbour_of harbor
 ? person p is lonely

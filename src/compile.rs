@@ -1,7 +1,7 @@
 //! Gives names their meaning: a name is a variable if the statement introduced it with a kind,
 //! and otherwise the handle of an object, which must exist when the line is stated.
 
-use crate::ast::{Cond, Expr, Head, PTerm};
+use crate::ast::{Cond, Expr, Field, Head, PTerm};
 use crate::error::Res;
 use crate::eval::{Eval, View};
 use crate::logic::{CCond, CExpr, CThe, Never, Rule, Scope, Var, cond_slots, expr_slots};
@@ -117,6 +117,16 @@ impl<'w> Compiler<'w> {
         if self.is_kind(name) { as_kind } else { as_term }
     }
 
+    /// The relation a `by` relation reads backwards, wherever the subject's kind is known.
+    fn by(&self, subj: &CExpr, rel: &Sym) -> Option<Sym> {
+        let kind = self.subject_kind(subj)?;
+        let field = match self.inside.last() {
+            None => self.world.field(&kind, rel),
+            Some((worlds, _)) => worlds.iter().find_map(|w| w.field(&kind, rel)),
+        };
+        field?.by.clone()
+    }
+
     /// Whether a name is a kind where the line runs.
     fn is_kind(&self, name: &str) -> bool {
         match self.inside.last() {
@@ -165,9 +175,21 @@ impl<'w> Compiler<'w> {
             Cond::In(world, body) => CCond::In(self.expr(world)?, Box::new(self.within(world, |c| c.cond(body))?)),
             Cond::Any(_, var) => CCond::Any(self.introduced(var)?),
             Cond::Pattern { subj, rel, val } => {
-                let subj = self.term(subj)?;
-                let val = self.term(val)?;
+                let subj = match subj {
+                    PTerm::Expr(e) => self.subject_with(e, &[rel])?,
+                    intro => self.term(intro)?,
+                };
+                let val = match val {
+                    PTerm::Expr(e) => self.value_of(e, self.subject_kind(&subj).as_ref(), rel)?,
+                    intro => self.term(intro)?,
+                };
                 self.check_fact(&subj, rel, &val)?;
+                // A `by` relation is its other end read backwards.
+                let by = self.by(&subj, rel);
+                let (subj, rel, val) = match &by {
+                    Some(by) => (val, by, subj),
+                    None => (subj, rel, val),
+                };
                 let mut needs = Vec::new();
                 for term in [&subj, &val] {
                     if !matches!(term, CExpr::Var(_)) {
@@ -178,7 +200,15 @@ impl<'w> Compiler<'w> {
             }
             Cond::Either { name, as_kind, as_term } => self.cond(self.meant(name, as_kind, as_term))?,
             Cond::Cmp(op, left, right) => {
-                let (left, right) = (self.expr(left)?, self.expr(right)?);
+                // A handle takes the kind of what it is compared with.
+                let (left, right) = if matches!(left, Expr::Name(_)) && !matches!(right, Expr::Name(_)) {
+                    let right = self.expr(right)?;
+                    (self.like(left, &right)?, right)
+                } else {
+                    let left = self.expr(left)?;
+                    let right = self.like(right, &left)?;
+                    (left, right)
+                };
                 let mut needs = Vec::new();
                 expr_slots(&left, &mut needs);
                 expr_slots(&right, &mut needs);
@@ -196,6 +226,44 @@ impl<'w> Compiler<'w> {
         match term {
             PTerm::Intro(_, var) => Ok(CExpr::Var(self.introduced(var)?)),
             PTerm::Expr(e) => self.expr(e),
+        }
+    }
+
+    /// A value where the place settles which kind it takes: a handle shared across kinds names
+    /// the object that fits.
+    fn expr_where(&mut self, e: &Expr, fits: impl Fn(&Sym) -> bool) -> Res<CExpr> {
+        match e {
+            Expr::Name(name) if self.slot(name).is_none() && self.here() => {
+                let id = self.world.resolve_where(name, fits)?;
+                Ok(self.object(id))
+            }
+            e => self.expr(e),
+        }
+    }
+
+    /// A value of the same kind as another, when the shapes settle that kind.
+    fn like(&mut self, e: &Expr, other: &CExpr) -> Res<CExpr> {
+        let kind = self.kind_of(other);
+        self.expr_where(e, |k| kind.as_ref() == Some(k))
+    }
+
+    /// A value of `relation`'s kind, as the shape of `kind` declares it.
+    pub fn value_of(&mut self, e: &Expr, kind: Option<&Sym>, rel: &Sym) -> Res<CExpr> {
+        let takes = kind.and_then(|k| self.world.field(k, rel)).map(|f| f.kind.clone());
+        self.expr_where(e, |k| takes.as_ref() == Some(k))
+    }
+
+    /// A subject that has every one of these relations.
+    pub fn subject_with(&mut self, e: &Expr, rels: &[&Sym]) -> Res<CExpr> {
+        let world = self.world;
+        self.expr_where(e, |k| rels.iter().all(|r| world.field(k, r).is_some()))
+    }
+
+    /// The kind of a subject: a variable's, or its value's when the shapes settle it.
+    pub fn subject_kind(&self, e: &CExpr) -> Option<Sym> {
+        match e {
+            CExpr::Var(slot) => Some(self.vars[*slot].kind.clone()),
+            e => self.kind_of(e),
         }
     }
 
@@ -226,8 +294,13 @@ impl<'w> Compiler<'w> {
                 let named = self.objects.len();
                 let mut desc = Vec::new();
                 let mut slots = Vec::new();
+                // The objects the description may fit say which kind each of its values takes.
+                let world = self.world;
+                let fits = |id: &ObjId| the.kind.as_ref().is_none_or(|k| world.objects[id].kind == *k);
+                let kinds: Vec<&Sym> = world.find(&the.handle).iter().filter(|id| fits(id)).map(|id| &world.objects[id].kind).collect();
                 for (rel, values) in &the.desc {
-                    let values = values.iter().map(|e| self.expr(e)).collect::<Res<Vec<_>>>()?;
+                    let takes = |k: &Sym| kinds.iter().any(|kind| world.field(kind, rel).is_some_and(|f| f.kind == *k));
+                    let values = values.iter().map(|e| self.expr_where(e, takes)).collect::<Res<Vec<_>>>()?;
                     values.iter().for_each(|e| expr_slots(e, &mut slots));
                     desc.push((rel.clone(), values));
                 }
@@ -247,9 +320,12 @@ impl<'w> Compiler<'w> {
                 CExpr::Index(*n)
             }
             Expr::Dot(base, rel) => {
-                let base = self.expr(base)?;
+                let base = self.subject_with(base, &[rel])?;
                 if let Some(kind) = self.kind_of(&base) {
                     self.takes(&kind, rel)?;
+                    if let Some(Field { kind, by: Some(by), .. }) = self.world.field(&kind, rel) {
+                        return Ok(CExpr::Back(Box::new(base), by.clone(), kind.clone()));
+                    }
                 }
                 CExpr::Dot(Box::new(base), rel.clone())
             }
@@ -271,6 +347,7 @@ impl<'w> Compiler<'w> {
             CExpr::Obj(i) => Some(self.world.objects[&self.objects[*i]].kind.clone()),
             CExpr::Var(slot) => (!self.vars[*slot].foreign).then(|| self.vars[*slot].kind.clone()),
             CExpr::Dot(base, rel) => self.takes(&self.kind_of(base)?, rel).ok()?,
+            CExpr::Back(_, _, kind) => Some(kind.clone()),
             CExpr::Neg(_) | CExpr::Count(_) | CExpr::Agg("count" | "sum", _) => Some("number".into()),
             CExpr::Bin(_, e, _) | CExpr::Agg(_, e) => self.kind_of(e),
             CExpr::Handle(_) | CExpr::The(_) | CExpr::Index(_) | CExpr::In(..) => None,
@@ -283,7 +360,7 @@ impl<'w> Compiler<'w> {
             self.need("id")?;
             return Ok(Some("number".into()));
         }
-        if is_primitive(kind) {
+        if is_primitive(kind) && self.world.field(kind, rel).is_none() {
             return Err(format!("{} has no relations", a(kind)));
         }
         let field = self.world.relation(kind, rel)?;
@@ -315,10 +392,15 @@ pub fn rule(world: &World, name: &Sym, source: &str, head: &Head, cond: &Cond) -
         named.push((kind, var));
     }
     let subj = c.open(&named, cond)?[0];
-    if world.field(kind, rel).is_none() {
-        return Err(format!("{kind} doesn't declare `{rel}`"));
+    match world.field(kind, rel) {
+        None => return Err(format!("{kind} doesn't declare `{rel}`")),
+        Some(Field { by: Some(by), .. }) => return Err(format!("`{rel}` is read from `{by}`; a rule can't state it")),
+        Some(_) => {}
     }
-    let val = c.term(val)?;
+    let val = match val {
+        PTerm::Expr(e) => c.value_of(e, Some(kind), rel)?,
+        intro => c.term(intro)?,
+    };
     c.check_fact(&CExpr::Var(subj), rel, &val)?;
     let cond = c.cond(cond)?;
     Ok(Rule { name: name.clone(), source: source.into(), vars: c.vars, objects: c.objects, subj, rel: rel.clone(), val, cond })

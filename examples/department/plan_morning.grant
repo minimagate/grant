@@ -1,10 +1,10 @@
 from department
 
-linear_algebra        [ taught_by: noether | meets_in: aula_magna | meets_at: mon_9 ]
-analysis_1            [ taught_by: cauchy  | meets_in: aula_magna | meets_at: tue_9 ]
-analysis_2            [ taught_by: riemann | meets_in: aula_b     | meets_at: mon_9 ]
-group_theory          [ taught_by: noether | meets_in: aula_b     | meets_at: tue_9 ]
-topology              [ taught_by: riemann | meets_in: aula_b     | meets_at: wed_9 ]
+linear_algebra        [ taught_by: noether | meets_in: great_hall | meets_at: mon_9 ]
+analysis_1            [ taught_by: cauchy  | meets_in: great_hall | meets_at: tue_9 ]
+analysis_2            [ taught_by: riemann | meets_in: room_b     | meets_at: mon_9 ]
+group_theory          [ taught_by: noether | meets_in: room_b     | meets_at: tue_9 ]
+topology              [ taught_by: riemann | meets_in: room_b     | meets_at: wed_9 ]
 logic_1               [ taught_by: godel   | meets_in: seminar    | meets_at: mon_11 ]
 galois_theory         [ taught_by: noether | meets_in: seminar    | meets_at: wed_9 ]
 differential_geometry [ taught_by: riemann | meets_in: seminar    | meets_at: tue_11 ]

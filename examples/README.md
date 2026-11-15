@@ -14,7 +14,7 @@ The worlds here carry no comments: each is explained below. Run one with `grant 
 
 The full world of section 14 of the specification, with a few additions.
 
-It builds on `numbers`, `text` and `id`, declares cities, feelings, conditions and people, and creates three people in two cities. Six rules then make facts follow:
+It builds on `numbers`, `text` and `id`, declares cities, feelings, conditions and people, and creates three people in two cities. A city is read from with `by`: `home_of: person by lives_in` is everyone who lives there, never stated, and a number is read from the same way: `aged: person by age` makes `24.aged` everyone aged 24. Six rules then make facts follow:
 
 | Rule | Says |
 | --- | --- |
@@ -40,6 +40,8 @@ The questions come in two groups, with a change between them.
 | `? sum harbor.knows.age / count harbor.knows` | 28.5 | an average is built, not given |
 | `? liz can_reach laurie` | yes | through harbor, by recursion |
 | `? person p is lonely` | nothing | everyone knows someone |
+| `? 24.aged` | harbor | `aged` reads `age` backwards: a number is read from, never stated |
+| `? york.home_of` | liz, harbor | `home_of` reads `lives_in` backwards |
 
 Then harbor moves to bath and turns 25 (`harbor [ lives_in: bath | age: harbor.age + 1 ]`), stops knowing liz, and stops feeling happy.
 
@@ -47,6 +49,7 @@ Then harbor moves to bath and turns 25 (`harbor [ lives_in: bath | age: harbor.a
 | --- | --- | --- |
 | `? harbor is_at peace` | no | the fact it followed from is gone |
 | `? harbor.age` | 25 | computed once, on its line |
+| `? 25.aged` | harbor | read from the number, as it now is |
 | `? person p is_neighbour_of harbor` | laurie | he lives in bath now |
 | `? person p is lonely` | liz | she only knew harbor through `mutual` |
 

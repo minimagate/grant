@@ -13,7 +13,7 @@ syn keyword grantStatement from kind rule never each
 syn keyword grantLogic     if where and or not in the
 syn keyword grantOperator  div mod
 syn keyword grantFunction  count sum min max
-syn keyword grantHowMany   one maybe some many
+syn keyword grantHowMany   one maybe some many by
 syn keyword grantPrimitive number text id world numbers
 syn match   grantNumber    "\<\d\+\%(\.\d\+\)\?\>"
 syn region  grantText      start=+"+ skip=+\\.+ end=+"+ contains=grantEscape
@@ -82,10 +82,11 @@ function! s:Learn() abort
   call s:Colour('grantRelationName', l:found.relations)
   call s:Colour('grantKindName', l:found.kinds)
   " Where a name stands settles what it is: a kind before `@`, an object after it, and a
-  " relation after `.`, whatever else shares the name.
+  " relation after `.` or `by`, whatever else shares the name.
   syn match grantKindName     "\<\h\w*\ze@"
   syn match grantObjectName   "@\@1<=\h\w*"
   syn match grantRelationName "\.\@1<=\h\w*"
+  syn match grantRelationName "\%(\<by\s\+\)\@<=\h\w*"
   " A rule's name is its own, even when an object shares it.
   silent! syn clear grantRuleName
   syn match grantRuleName "\%(^\s*\%(-\s*\)\?\%(rule\|never\)\s\+\)\@<=\h\w*"

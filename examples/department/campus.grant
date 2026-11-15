@@ -1,7 +1,7 @@
 from vocabulary
 
-room aula_magna [ seats: 120 ]
-room aula_b     [ seats: 40 ]
+room great_hall [ seats: 120 ]
+room room_b     [ seats: 40 ]
 room seminar    [ seats: 3 ]
 
 slot mon_9  [ day: 1 | hour: 9 ]

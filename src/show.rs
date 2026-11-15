@@ -25,17 +25,25 @@ pub fn source(world: &World) -> String {
     let mut early = BTreeSet::new();
     for (i, (name, shape)) in kinds.iter().enumerate() {
         let later = |k: &Sym| k != *name && kinds[i + 1..].iter().any(|(other, _)| *other == k);
-        early.extend(shape.values().map(|field| &field.kind).filter(|k| later(k)));
+        early.extend(shape.values().filter(|field| field.by.is_none()).map(|field| &field.kind).filter(|k| later(k)));
     }
     lines.extend(early.iter().map(|name| format!("kind {name}")));
     for (name, shape) in world.kinds.iter().filter(|(name, _)| !is_primitive(name)) {
         let plus = if &**name == "world" || early.contains(name) { "+ " } else { "" };
-        let fields: Vec<String> = shape.iter().map(|(rel, field)| format!("{plus}{rel}: {field}")).collect();
+        let stated = shape.iter().filter(|(_, field)| field.by.is_none());
+        let fields: Vec<String> = stated.map(|(rel, field)| format!("{plus}{rel}: {field}")).collect();
         match fields.as_slice() {
             [] if &**name == "world" || early.contains(name) => {}
             [] => lines.push(format!("kind {name}")),
             [field] => lines.push(format!("kind {name} [ {field} ]")),
             _ => lines.push(format!("kind {name} [\n  {}\n]", fields.join("\n  "))),
+        }
+    }
+    // A relation read with `by` comes once the relation it reads is declared: after every shape.
+    for (name, shape) in &world.kinds {
+        let read: Vec<String> = shape.iter().filter(|(_, f)| f.by.is_some()).map(|(rel, field)| format!("{rel}: {field}")).collect();
+        if !read.is_empty() {
+            lines.push(format!("kind {name} [ {} ]", read.join(" | ")));
         }
     }
     lines.push(String::new());

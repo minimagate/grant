@@ -36,9 +36,9 @@ The files carry no comments; this is what each one does.
 
 ### `vocabulary`
 
-Only declares. It builds on `numbers` and `text` and states the kinds everything else shares: `area`, `role`, `room`, `slot`, `course` and `person`, each with its shape. Nothing exists yet except three roles, `lecturer`, `student` and `afternoon`, which are flags: values a relation can hold. One rule marks a slot as afternoon when its hour is 14 or later.
+Only declares. It builds on `numbers` and states the kinds everything else shares: `area`, `role`, `subject`, `room`, `slot`, `course` and `person`, each with its shape. Nothing exists yet except three roles, `lecturer`, `student` and `afternoon`, which are flags: values a relation can hold. One rule marks a slot as afternoon when its hour is 14 or later.
 
-What things share is a thing, and a fact is stated from one end. So every shared thing gets its other end by a rule: `offers` gives an area its courses, and `holders` and `marks` give a role its people and slots. `area@algebra.course` is every algebra course, and `role@lecturer.person` every lecturer.
+What things share is a thing, not a text, and a fact is stated from one end. Every shared thing reads its other end with `by`: a subject's `course: course by subject` is the course that teaches it, an area's `course: course by area` its courses, and a role's `person: person by is` and `slot: slot by is` who and what has it. Nothing is stated twice: `area@algebra.course` is every algebra course, and `role@lecturer.person` every lecturer.
 
 A course has `requires`, which is stated, and `needs`, which is derived. Both are declared here, because stated and derived facts share a shape.
 
@@ -46,13 +46,13 @@ A course has `requires`, which is stated, and `needs`, which is derived. Both ar
 
 Built on `vocabulary`. A name is a thing, not a text: the kind `name`, ten names written in small letters, and a new relation on people, `name: one name`. A person has one name, and a name can belong to several people.
 
-`rule bearer` gives the other end: if a person's name is n, then n's `person` is that person. So `noether.name` is emmy, and `name@emmy.person` is everyone called emmy: `@` goes from the kind to the name, `.` from the name along `person`.
+A name reads its other end with `person: person by name`. So `noether.name` is emmy, and `name@emmy.person` is everyone called emmy: `@` goes from the kind to the name, `.` from the name along `person`.
 
-Five students share a handle with their name: there is a person ada and a name ada. The kind tells them apart, so people write `name: name@ada`, `next_year` writes `- person@claire`, and Grant shows the student as `person@ada`.
+Five students share a handle with their name: there is a person ada and a name ada. Where the place settles the kind, the handle needs nothing more: `name: ada` takes a name, and `ada [ wants: … ]` is about whoever has `wants`. Where nothing settles it, the kind is written: `next_year` removes `person@claire`. Subjects share handles with their courses, and areas with subjects, in the same way.
 
 ### `catalogue`
 
-Four areas and eight courses, each with a title, credits, an area and what it requires.
+Four areas, eight subjects and eight courses, each course with its subject, credits, area and what it requires. A subject is a thing, not a text, so `subject@logic.course` is the course that teaches logic: logic_1.
 
 - `rule needs` is recursive: a course needs what it requires, and what those need in turn.
 - `never circular` forbids a course from standing, however far back, behind itself.
@@ -62,7 +62,8 @@ Four areas and eight courses, each with a title, credits, an area and what it re
 | `? differential_geometry.needs` | linear_algebra, analysis_1, analysis_2, topology |
 | `? course c and not c requires course p` | linear_algebra, analysis_1, logic_1: where a first-year student can start |
 | `? sum galois_theory.needs.credits` | 15: the credits to earn before Galois Theory |
-| `? area@algebra.course` | linear_algebra, group_theory, galois_theory: `offers` derives it |
+| `? area@algebra.course` | linear_algebra, group_theory, galois_theory: read from `area` |
+| `? subject@logic.course` | logic_1 |
 
 ### `campus`
 
@@ -75,7 +76,7 @@ Built on `names` and `catalogue`. Four lecturers with the areas they can teach, 
 | Question | Shows |
 | --- | --- |
 | `? noether.name` | emmy |
-| `? name@emmy.person` | noether: nobody stated it; `bearer` derives it |
+| `? name@emmy.person` | noether: read from `name` |
 | `? role@lecturer.person` | noether, cauchy, riemann, godel |
 
 ### `department`

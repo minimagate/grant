@@ -1,10 +1,11 @@
 from vocabulary
 
-kind name [
-  person:  person
-]
+kind name
 kind person [
   + name:  one name
+]
+kind name [
+  person:  person by name
 ]
 
 name emmy
@@ -17,5 +18,3 @@ name claire
 name devon
 name ellie
 name felix
-
-rule bearer: name n person person p if p name n

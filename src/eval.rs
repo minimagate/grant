@@ -1,6 +1,6 @@
 //! Evaluation: what a value is, and which bindings of its variables make a condition true.
 
-use crate::ast::Op;
+use crate::ast::{Field, Op};
 use crate::equal::same_shape;
 use crate::error::Res;
 use crate::logic::{CCond, CExpr, CThe, Var, expr_slots};
@@ -29,6 +29,11 @@ impl<'a> View<'a> {
         }
         let object = self.world.objects.get(&subj).filter(|_| self.world.kinds.contains_key("id"));
         object.map(|o| count(o.index as usize)).into_iter().collect()
+    }
+
+    /// Every object of a kind whose relation `by` holds the value: a `by` relation followed.
+    fn back(&self, value: &Value, by: &str, kind: &str) -> Vec<Value> {
+        self.facts.subjects(by, value).map(Value::Obj).filter(|s| self.world.fits(kind, s)).collect()
     }
 
     /// Every object with this index: what `id.3` stands for.
@@ -234,12 +239,21 @@ impl Eval<'_> {
             },
             CExpr::The(the) => vec![Value::Obj(self.the(the, env, view)?)],
             CExpr::Index(index) => view.numbered(*index),
+            CExpr::Back(base, by, kind) => {
+                let mut values = BTreeSet::new();
+                for value in self.expr(base, env, view, strict)? {
+                    values.extend(view.back(&value, by, kind));
+                }
+                values.into_iter().collect()
+            }
             CExpr::Dot(base, rel) => {
                 let mut values = Vec::new();
                 for subject in self.expr(base, env, view, strict)? {
-                    match subject {
-                        Value::Obj(id) => values.extend(view.values(id, rel)),
-                        other => return Err(format!("{} has no relations", a(view.world.kind_of(&other)))),
+                    // Inside `in`, a kind is known only once the value is.
+                    match (view.world.field(view.world.kind_of(&subject), rel), subject) {
+                        (Some(Field { kind, by: Some(by), .. }), value) => values.extend(view.back(&value, by, kind)),
+                        (_, Value::Obj(id)) => values.extend(view.values(id, rel)),
+                        (_, other) => return Err(format!("{} has no relations", a(view.world.kind_of(&other)))),
                     }
                 }
                 // A collection has each thing in it once. Numbers and text stay one per fact

@@ -68,7 +68,7 @@ fn expr_reads<'r>(e: &'r CExpr, how: Use, out: &mut Vec<Read<'r>>) {
                 described.iter().for_each(|e| expr_reads(e, gathered("picks from"), out));
             }
         }
-        CExpr::Dot(base, rel) => {
+        CExpr::Dot(base, rel) | CExpr::Back(base, rel, _) => {
             out.push((rel, None, how));
             expr_reads(base, how, out);
         }
@@ -278,7 +278,10 @@ pub fn check(world: &World) -> Res<Vec<String>> {
     }
     for (id, object) in &world.objects {
         for (rel, field) in world.kinds.get(&object.kind).into_iter().flatten() {
-            let n = model.facts.values(*id, rel).count();
+            let n = match &field.by {
+                Some(by) => model.facts.subjects(by, &Value::Obj(*id)).filter(|s| world.fits(&field.kind, &Value::Obj(*s))).count(),
+                None => model.facts.values(*id, rel).count(),
+            };
             let broken = match field.how {
                 How::One => n != 1,
                 How::Maybe => n > 1,

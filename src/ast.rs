@@ -101,6 +101,8 @@ pub enum How {
 pub struct Field {
     pub how: How,
     pub kind: Sym,
+    /// `person: person by name`: read from the other end of `name`, never stated.
+    pub by: Option<Sym>,
 }
 
 impl fmt::Display for Field {
@@ -111,7 +113,11 @@ impl fmt::Display for Field {
             How::Some => "some ",
             How::Many => "",
         };
-        write!(f, "{word}{}", self.kind)
+        write!(f, "{word}{}", self.kind)?;
+        match &self.by {
+            Some(by) => write!(f, " by {by}"),
+            None => Ok(()),
+        }
     }
 }
 

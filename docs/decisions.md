@@ -50,7 +50,7 @@ A decision marked **(extension)** adds something the grammar doesn't list.
 
 19. **Removing is lenient, and says so.** `- harbor knows ghost` does nothing when ghost isn't there, and Grant remarks "nothing removed: `ghost` isn't here", so a typo doesn't pass silently. Removing a fact that was never stated but follows from a rule is also reported.
 
-20. **Restating a kind must agree with it.** `kind person [ age: maybe text ]` on a person that already declares `age: one number` is an error that points at `+`. Restating the same thing is stating it once.
+20. **Restating a kind must agree with it.** `kind person [ age: maybe text ]` on a person that already declares `age: one number` is an error that points at `+`. Restating the same thing is stating it once, and a relation the kind lacks is added.
 
 21. **The end of the world also checks value kinds.** `kind person [ + age: one text ]` is accepted while people have numeric ages; if they still do when the world ends, Grant names them. This is how a relation declared two ways is settled after a merge.
 
@@ -98,9 +98,13 @@ A decision marked **(extension)** adds something the grammar doesn't list.
 
 38. **A line's subject is one thing**: a handle, `kind@handle` or `the …`, never a relation followed. Dots are for values.
 
-39. **Grant has no reverse dot.** The other end of a relation is a relation of its own, given by a rule: `rule bearer: name n person person p if p name n`. Every shared thing in the examples (names, areas, roles) gets its other end this way.
+39. **Grant has no reverse dot; it has `by`.** The other end of a relation is a relation of its own, declared in the shape of the other kind: `kind name [ person: person by name ]`. It is read, never stated, so nothing is stored twice and the two ends can't disagree. It compiles to the relation it reads, so rules that use it are ordered by that relation. While it is read, that relation can't be removed or given another kind. Numbers and text take only `by` relations, which is how `24.aged` finds everyone aged 24.
 
-40. **Names are written in small letters.** It is a convention, not a rule the interpreter checks; capitals belong inside text.
+40. **The place settles a shared handle.** A value takes the kind its relation takes, in a fact, in brackets, after `each` and in a description after `the`; a handle compared with a value takes that value's kind; and a subject is the object that has the relations its line uses (in brackets, all of them). If exactly one object sharing the handle fits, it is meant; otherwise the error suggests `kind@handle`. Inside `in w:`, where kinds are known only as the world is looked into, a handle is not settled this way.
+
+41. **An answer shows a shared handle bare when the kind is plain**: every value it shows has the same kind, or the value is a variable's, whose kind the question gives. `grant show` always writes `kind@handle`, so its listing runs.
+
+42. **Names are written in small letters.** It is a convention, not a rule the interpreter checks; capitals belong inside text.
 
 ## Not built
 

@@ -85,7 +85,24 @@ fn the_examples_run() {
     };
     assert_eq!(
         example("harbor.grant"),
-        ["yes", "harbor", "liz", "3", "york, happy, peace, liz", "liz, laurie", "28.5", "yes", "nothing", "no", "25", "laurie", "liz"]
+        [
+            "yes",
+            "harbor",
+            "liz",
+            "3",
+            "york, happy, peace, liz",
+            "liz, laurie",
+            "28.5",
+            "yes",
+            "nothing",
+            "harbor",
+            "liz, harbor",
+            "no",
+            "25",
+            "harbor",
+            "laurie",
+            "liz"
+        ]
     );
     assert_eq!(example("towns/both.grant"), ["bath, brighton", "bath"]);
     assert_eq!(example("compare.grant"), ["yes", "move_bath", "bath", "liz", "no", "yes", "yes"]);
@@ -98,7 +115,7 @@ fn the_examples_run() {
     let review = example("department/review.grant");
     assert_eq!(review[2], "plan_merged");
     assert_eq!(review[5..], ["yes", "no", "yes"]);
-    assert_eq!(example("department/next_year.grant")[..2], ["logic_1", "s: person@felix, c: group_theory"]);
+    assert_eq!(example("department/next_year.grant")[..2], ["logic_1", "s: felix, c: group_theory"]);
 }
 
 #[test]
@@ -113,7 +130,7 @@ fn a_kind_and_a_handle_point_at_one_object() {
              ? person p knows person@york
              - person@zed"
         )),
-        ["city@york", "liz, harbor, person@york", "liz", "nothing removed: `person@zed` isn't here"]
+        ["york", "liz, harbor, york", "liz", "nothing removed: `person@zed` isn't here"]
     );
     // In brackets, `each`, rules, constraints and patterns of three and four names.
     assert_eq!(
@@ -127,12 +144,12 @@ fn a_kind_and_a_handle_point_at_one_object() {
              ? person@york.age
              ? count (person p is adult)"
         )),
-        ["no", "harbor, person@york", "51", "3"]
+        ["no", "harbor, york", "51", "3"]
     );
     // Inside a held world, and named again in a listing that runs as it is.
     let held =
         run(&[("town", &two), ("w", "from numbers\nworld town\n? in town: person@york.lives_in\n? in town: person p lives_in city@york")]);
-    assert_eq!(held.unwrap(), ["city@york", "liz, harbor, person@york"]);
+    assert_eq!(held.unwrap(), ["york", "liz, harbor, york"]);
     let path = write_world(&format!("{two}person@york knows harbor"));
     let world = Loader::new().run(&path, &mut Vec::new()).unwrap();
     std::fs::remove_dir_all(path.parent().unwrap()).ok();
@@ -145,6 +162,95 @@ fn a_kind_and_a_handle_point_at_one_object() {
     assert_eq!(fails(&format!("{two}? mood@york")), "kind `mood` doesn't exist yet");
     assert_eq!(fails(&format!("{two}? person@zed")), "no people match this description");
     assert_eq!(fails(&format!("{two}? city@")), "expected a handle after `@` but found the end of the line");
+}
+
+#[test]
+fn a_place_settles_a_shared_handle() {
+    // The relation's kind settles a value, and the relations a line uses settle its subject.
+    let two = town("person york [ age: 50 | lives_in: york ]\n");
+    assert_eq!(
+        shows(&format!(
+            "{two}york [ knows: liz ]
+             york knows laurie
+             liz knows york
+             ? york.knows
+             ? person p lives_in york
+             ? liz.knows
+             - york knows laurie
+             ? count york.knows"
+        )),
+        ["liz, laurie", "liz, harbor, york", "york", "1"]
+    );
+    // So do a description after `the`, the value `each` states, and what a handle is compared with.
+    assert_eq!(
+        shows(&format!(
+            "{two}? the person york [ lives_in: york ]
+             ? person p and p.lives_in = york and p != york
+             each person p where p.age > 40 lives_in bath
+             ? york.lives_in
+             - each person p lives_in york
+             ? count (person p lives_in york)
+             each person p [ lives_in: york ]"
+        )),
+        ["york", "liz, harbor", "york, bath", "0"]
+    );
+    // Nothing settles a bare value, or a subject both kinds could be.
+    assert_eq!(fails(&format!("{two}? york")), "2 objects called york; write `city@york` or `person@york`");
+    assert_eq!(fails(&format!("{two}- york")), "2 objects called york; write `city@york` or `person@york`");
+}
+
+#[test]
+fn by_reads_a_relation_from_the_other_end() {
+    let world = town(
+        "kind city [ home_of: person by lives_in ]
+         kind number [ aged: person by age ]
+         kind person [ + friend_of: person by knows ]
+         ",
+    );
+    assert_eq!(
+        shows(&format!(
+            "{world}? york.home_of
+             ? 24.aged
+             ? liz.friend_of
+             ? city c home_of person p and p.age > 25
+             ? 30 aged person p
+             ? count york.home_of
+             rule settled: person p is adult if p.lives_in.home_of = liz
+             ? person p is adult
+             harbor [ age: 30 ]
+             ? 30.aged"
+        )),
+        ["liz, harbor", "harbor", "harbor", "c: york, p: liz\nc: bath, p: laurie", "laurie", "2", "liz, harbor", "laurie, harbor"]
+    );
+    // A `by` relation is only read: stating, removing or deriving it is refused.
+    assert_eq!(fails(&format!("{world}york home_of liz")), "`home_of` is read from `lives_in`; state `lives_in` on the other end");
+    assert_eq!(fails(&format!("{world}york [ home_of: liz ]")), "`home_of` is read from `lives_in`; state `lives_in` on the other end");
+    assert_eq!(fails(&format!("{world}- york home_of liz")), "`home_of` is read from `lives_in`; state `lives_in` on the other end");
+    assert_eq!(
+        fails(&format!("{world}rule r: city c home_of person p if p.age > 1")),
+        "`home_of` is read from `lives_in`; a rule can't state it"
+    );
+    // It reads a relation that takes this kind, and that relation stays while it is read.
+    assert_eq!(fails(&town("kind city [ home_of: person by knows ]")), "`home_of` reads `knows` backwards, so person needs `knows: city`");
+    assert_eq!(
+        fails(&town("kind number [ big: one number ]")),
+        "a number has no relations of its own; it can only be read from, with `by`"
+    );
+    assert_eq!(
+        fails(
+            "from numbers\nkind city\nkind person [ lives_in: city ]\nkind city [ home_of: person by lives_in ]\nkind person [ - lives_in ]"
+        ),
+        "`lives_in` can't go: city still reads it (`home_of: person by lives_in`)"
+    );
+    assert_eq!(
+        fails(&format!("{world}kind person [ + lives_in: one feeling ]")),
+        "`lives_in` must keep taking a city: city still reads it (`home_of: person by lives_in`)"
+    );
+    // The words of a shape count what is read.
+    assert_eq!(
+        ends_with(&[("w", &town("kind city [ + home_of: some person by lives_in ]"))]),
+        ["brighton has no `home_of` (city: `home_of: some person by lives_in`)"]
+    );
 }
 
 #[test]
@@ -421,7 +527,10 @@ fn errors_on_a_line() {
     );
     assert_eq!(fails(&town("from numbers")), "`from` comes first, and lists every parent on one line");
     assert_eq!(fails("from town_x"), "no world called `town_x` here");
-    assert_eq!(fails(&town("person york [ age: 1 | lives_in: york ]")), "2 objects called york; write `city@york` or `person@york`");
+    assert_eq!(
+        fails(&town("person york [ age: 1 | lives_in: york ]\n? york")),
+        "2 objects called york; write `city@york` or `person@york`"
+    );
     assert_eq!(fails(&town("harbor knows liz laurie")), "`laurie` doesn't belong here");
     assert_eq!(fails(&town("person x [ age: 1")), "a bracket opened here is never closed");
 }

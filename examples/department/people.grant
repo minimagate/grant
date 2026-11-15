@@ -1,51 +1,51 @@
 from names, catalogue
 
 person noether [
-  name:       name@emmy
+  name:       emmy
   is:         lecturer
   can_teach:  algebra, logic
 ]
 person cauchy [
-  name:       name@augustin
+  name:       augustin
   is:         lecturer
   can_teach:  analysis
 ]
 person riemann [
-  name:       name@bernhard
+  name:       bernhard
   is:         lecturer
   can_teach:  geometry, analysis
 ]
 person godel [
-  name:       name@kurt
+  name:       kurt
   is:         lecturer
   can_teach:  logic
 ]
 
 person ada [
-  name:   name@ada
+  name:   ada
   is:     student
   wants:  linear_algebra, analysis_1, logic_1
 ]
 person blake [
-  name:    name@blake
+  name:    blake
   is:      student
   passed:  linear_algebra, analysis_1
   wants:   analysis_2, group_theory, topology
 ]
 person claire [
-  name:    name@claire
+  name:    claire
   is:      student
   passed:  linear_algebra, analysis_1, analysis_2, topology
   wants:   differential_geometry, group_theory, logic_1
 ]
 person devon [
-  name:    name@devon
+  name:    devon
   is:      student
   passed:  linear_algebra
   wants:   galois_theory, group_theory, analysis_1
 ]
 person ellie [
-  name:    name@ellie
+  name:    ellie
   is:      student
   passed:  linear_algebra, group_theory, analysis_1
   wants:   galois_theory, topology, analysis_2

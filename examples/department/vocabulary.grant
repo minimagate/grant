@@ -1,7 +1,8 @@
-from numbers, text
+from numbers
 
 kind area
 kind role
+kind subject
 kind room [
   seats:  one number
 ]
@@ -12,7 +13,7 @@ kind slot [
 ]
 
 kind course [
-  title:     one text
+  subject:   one subject
   credits:   one number
   area:      one area
   requires:  course
@@ -32,14 +33,13 @@ role afternoon
 
 rule afternoon: slot s is afternoon if s.hour >= 14
 
+kind subject [
+  course:  course by subject
+]
 kind area [
-  + course:  course
+  course:  course by area
 ]
 kind role [
-  + person:  person
-  + slot:    slot
+  person:  person by is
+  slot:    slot by is
 ]
-
-rule offers:   area a course course c if c area a
-rule holders:  role r person person p if p is r
-rule marks:    role r slot slot s if s is r

@@ -160,8 +160,15 @@ impl Parser<'_> {
                 // `knows: many` alone would name a kind called many.
                 let worded = p.name_at(1).is_some() && (word != How::Many || p.name_at(0).is_some_and(|w| &**w == "many"));
                 p.i += worded as usize;
-                let field =
-                    Field { how: if worded { word } else { How::Many }, kind: if p.eat("id") { "id".into() } else { p.name("a kind")? } };
+                let how = if worded { word } else { How::Many };
+                let kind = if p.eat("id") { "id".into() } else { p.name("a kind")? };
+                let by = if p.name_at(0).is_some_and(|w| &**w == "by") {
+                    p.i += 1;
+                    Some(p.name("the relation after `by`")?)
+                } else {
+                    None
+                };
+                let field = Field { how, kind, by };
                 edits.push(if set { ShapeEdit::Set(rel, field) } else { ShapeEdit::Declare(rel, field) });
                 Ok(())
             })?;

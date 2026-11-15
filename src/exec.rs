@@ -1,6 +1,6 @@
 //! Running statements: each line changes K, O, F or R of its world, or asks about it.
 
-use crate::ast::{Assign, Change, Cond, EachAction, Expr, ShapeEdit, Stmt};
+use crate::ast::{Assign, Change, Cond, EachAction, Expr, Field, ShapeEdit, Stmt};
 use crate::compile::{self, Compiler};
 use crate::error::{Error, Fail, Res};
 use crate::eval::{Env, Eval, View};
@@ -101,16 +101,17 @@ impl Session {
             }
             Stmt::Fact { subj, rel, value } => {
                 let mut c = Compiler::new(&self.world);
-                let (subj, value) = (c.expr(&subj)?, c.expr(&value)?);
+                let subj = c.subject_with(&subj, &[&rel])?;
+                let value = c.value_of(&value, c.subject_kind(&subj).as_ref(), &rel)?;
                 let subj = self.one(c.eval(), &subj)?;
                 let kind = &self.world.objects[&subj].kind;
-                self.world.relation(kind, &rel)?;
+                self.world.stated(kind, &rel)?;
                 let values = self.values(c.eval(), &value, &mut Vec::new())?;
                 values.iter().try_for_each(|v| self.world.check_value(kind, &rel, v))?;
                 values.into_iter().for_each(|v| self.world.state(subj, &rel, v));
             }
             Stmt::Set { subj, values } => {
-                let subj = self.object(&subj)?;
+                let subj = self.object(&subj, &values.iter().map(|a| &a.rel).collect::<Vec<_>>())?;
                 self.set(subj, &values)?;
             }
             Stmt::Remove { subj, rel, value } => self.remove(&subj, rel, value.as_ref(), said)?,
@@ -165,10 +166,10 @@ impl Session {
         }
     }
 
-    /// The object a reference points at.
-    fn object(&self, reference: &Expr) -> Res<ObjId> {
+    /// The object a reference points at: of several sharing a handle, the one that has `rels`.
+    fn object(&self, reference: &Expr, rels: &[&Sym]) -> Res<ObjId> {
         let mut c = Compiler::new(&self.world);
-        let e = c.expr(reference)?;
+        let e = c.subject_with(reference, rels)?;
         self.one(c.eval(), &e)
     }
 
@@ -177,8 +178,8 @@ impl Session {
     fn plan(c: &mut Compiler, kind: &Sym, assigns: &[Assign]) -> Res<Vec<Plan>> {
         let mut plans = Vec::new();
         for Assign { rel, change, values } in assigns {
-            c.world.relation(kind, rel)?;
-            let values = values.iter().map(|e| c.expr(e)).collect::<Res<_>>()?;
+            c.world.stated(kind, rel)?;
+            let values = values.iter().map(|e| c.value_of(e, Some(kind), rel)).collect::<Res<_>>()?;
             plans.push(Assign { rel: rel.clone(), change: *change, values });
         }
         Ok(plans)
@@ -231,8 +232,14 @@ impl Session {
     // --- kinds ---
 
     fn kind(&mut self, name: &Sym, edits: Vec<ShapeEdit>) -> Res<()> {
-        if is_primitive(name) {
-            return Err(if self.world.has_primitive(name) { format!("{} has no relations", a(name)) } else { self.world.no_kind(name) });
+        // A number or a text holds nothing, but it can be read from: its relations are all `by`.
+        let read_only = |e: &ShapeEdit| matches!(e, ShapeEdit::Declare(_, f) | ShapeEdit::Set(_, f) if f.by.is_some());
+        if is_primitive(name) && !(self.world.has_primitive(name) && !edits.is_empty() && edits.iter().all(read_only)) {
+            return Err(if self.world.has_primitive(name) {
+                format!("{} has no relations of its own; it can only be read from, with `by`", a(name))
+            } else {
+                self.world.no_kind(name)
+            });
         }
         if !self.world.find(name).is_empty() {
             return Err(format!("`{name}` is already an object"));
@@ -243,13 +250,24 @@ impl Session {
                 ShapeEdit::Declare(_, field) | ShapeEdit::Set(_, field) if !self.world.kinds.contains_key(&field.kind) => {
                     return Err(self.world.no_kind(&field.kind));
                 }
+                // `person: person by name` reads `name` backwards, so a person's `name` must take this kind.
+                ShapeEdit::Declare(rel, Field { kind, by: Some(by), .. }) | ShapeEdit::Set(rel, Field { kind, by: Some(by), .. })
+                    if self.world.field(&kind, &by).is_none_or(|f| f.kind != *name || f.by.is_some()) =>
+                {
+                    return Err(format!("`{rel}` reads `{by}` backwards, so {kind} needs `{by}: {name}`"));
+                }
                 ShapeEdit::Declare(rel, field) => match self.world.field(name, &rel) {
                     Some(old) if *old != field || self.world.is_disputed(name, &rel) => {
                         return Err(format!("{name} already declares `{rel}: {old}`; write `+ {rel}: {field}` to change it"));
                     }
                     _ => self.world.set_field(name, &rel, Some(field)),
                 },
-                ShapeEdit::Set(rel, field) => self.world.set_field(name, &rel, Some(field)),
+                ShapeEdit::Set(rel, field) => {
+                    if let Some(reader) = self.reader(name, &rel).filter(|(kind, _)| *kind != field.kind) {
+                        return Err(format!("`{rel}` must keep taking {}: {}", a(&reader.0), reader.1));
+                    }
+                    self.world.set_field(name, &rel, Some(field))
+                }
                 ShapeEdit::Remove(rel) => {
                     let using = self.world.of_kind(name).filter(|id| self.world.facts.values(*id, &rel).next().is_some()).count();
                     if using > 0 {
@@ -259,11 +277,22 @@ impl Session {
                     if let Some(rule) = self.world.rules.values().find(|r| r.rel == rel && r.vars[r.subj].kind == *name) {
                         return Err(format!("rule `{}` still produces `{rel}`", rule.name));
                     }
+                    if let Some((_, reader)) = self.reader(name, &rel) {
+                        return Err(format!("`{rel}` can't go: {reader}"));
+                    }
                     self.world.set_field(name, &rel, None);
                 }
             }
         }
         Ok(())
+    }
+
+    /// The kind that reads `kind.rel` backwards with `by`, and the sentence that says so.
+    fn reader(&self, kind: &Sym, rel: &Sym) -> Option<(Sym, String)> {
+        self.world.kinds.iter().find_map(|(reader, shape)| {
+            let (r, f) = shape.iter().find(|(_, f)| f.kind == *kind && f.by.as_ref() == Some(rel))?;
+            Some((reader.clone(), format!("{reader} still reads it (`{r}: {f}`)")))
+        })
     }
 
     fn remove_kind(&mut self, name: &Sym) -> Res<()> {
@@ -333,7 +362,7 @@ impl Session {
                 return Ok(());
             }
         }
-        let subj = self.object(subj)?;
+        let subj = self.object(subj, &rel.iter().collect::<Vec<_>>())?;
         let Some(rel) = rel else {
             self.remove_object(subj, said);
             return Ok(());
@@ -343,12 +372,13 @@ impl Session {
             said.push(format!("nothing removed: {kind} has no relation `{rel}`"));
             return Ok(());
         }
+        self.world.stated(&kind, &rel)?;
         let Some(value) = value else {
             self.world.clear(subj, &rel);
             return self.still_follows(subj, &rel, said);
         };
         let mut c = Compiler::new(&self.world);
-        let value = c.expr(value)?;
+        let value = c.value_of(value, Some(&kind), &rel)?;
         let values = self.values(c.eval(), &value, &mut Vec::new())?;
         let stated: Vec<bool> = values.iter().map(|v| self.world.unstate(subj, &rel, v)).collect();
         let model = self.world.model()?;
@@ -381,15 +411,18 @@ impl Session {
             EachAction::Set(assigns) => Some(Self::plan(&mut c, kind, assigns)?),
             EachAction::Fact(rel, value) => {
                 self.world.relation(kind, rel)?;
-                one(rel, Change::Add, vec![c.expr(value)?])
+                one(rel, Change::Add, vec![c.value_of(value, Some(kind), rel)?])
             }
             EachAction::RemoveObjects => None,
             EachAction::RemoveRel(rel, _) if self.world.field(kind, rel).is_none() => {
                 said.push(format!("nothing removed: {kind} has no relation `{rel}`"));
                 return Ok(());
             }
+            EachAction::RemoveRel(rel, _) if self.world.field(kind, rel).is_some_and(|f| f.by.is_some()) => {
+                return Err(self.world.stated(kind, rel).unwrap_err());
+            }
             EachAction::RemoveRel(rel, None) => one(rel, Change::Set, Vec::new()),
-            EachAction::RemoveRel(rel, Some(value)) => one(rel, Change::Remove, vec![c.expr(value)?]),
+            EachAction::RemoveRel(rel, Some(value)) => one(rel, Change::Remove, vec![c.value_of(value, Some(kind), rel)?]),
         };
         let mut needs = vec![subj];
         for plan in plans.iter().flatten() {
@@ -435,7 +468,12 @@ impl Session {
             if shown.iter().all(|v| index(v).is_some_and(|(kind, _)| Some(kind) == index(shown[0]).map(|i| i.0))) {
                 shown.sort_by_key(|v| index(v).map(|i| i.1));
             }
-            if shown.is_empty() { "nothing".into() } else { shown.iter().map(|v| self.world.show(v)).collect::<Vec<_>>().join(", ") }
+            let one_kind = shown.iter().all(|v| self.world.kind_of(v) == self.world.kind_of(shown[0]));
+            if shown.is_empty() {
+                "nothing".into()
+            } else {
+                shown.iter().map(|v| self.world.show_as(v, one_kind)).collect::<Vec<_>>().join(", ")
+            }
         };
         if let Cond::Value(value) = question {
             let value = c.expr(value)?;
@@ -460,7 +498,7 @@ impl Session {
             [_] => list(&rows.into_iter().flatten().collect::<Vec<_>>()),
             _ => {
                 let row = |row: &Vec<Value>| {
-                    let cells = asked.iter().zip(row).map(|(slot, v)| format!("{}: {}", c.vars[*slot].name, self.world.show(v)));
+                    let cells = asked.iter().zip(row).map(|(slot, v)| format!("{}: {}", c.vars[*slot].name, self.world.show_as(v, true)));
                     cells.collect::<Vec<_>>().join(", ")
                 };
                 rows.iter().map(row).collect::<Vec<_>>().join("\n")

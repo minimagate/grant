@@ -24,6 +24,9 @@ pub enum CExpr {
     The(Box<CThe>),
     Index(u64),
     Dot(Box<CExpr>, Sym),
+    /// A `by` relation followed: every object of the kind (the second name) whose relation (the
+    /// first) holds the value.
+    Back(Box<CExpr>, Sym, Sym),
     Neg(Box<CExpr>),
     Bin(Op, Box<CExpr>, Box<CExpr>),
     Agg(Op, Box<CExpr>),
@@ -124,7 +127,7 @@ pub fn expr_slots(e: &CExpr, out: &mut Vec<usize>) {
         CExpr::Const(_) | CExpr::Obj(_) | CExpr::Handle(_) | CExpr::Index(_) => {}
         CExpr::Var(i) => out.push(*i),
         CExpr::The(the) => the.desc.iter().flat_map(|(_, es)| es).for_each(|e| expr_slots(e, out)),
-        CExpr::Dot(e, _) | CExpr::Neg(e) | CExpr::Agg(_, e) => expr_slots(e, out),
+        CExpr::Dot(e, _) | CExpr::Back(e, ..) | CExpr::Neg(e) | CExpr::Agg(_, e) => expr_slots(e, out),
         CExpr::Bin(_, l, r) | CExpr::In(l, r) => {
             expr_slots(l, out);
             expr_slots(r, out);

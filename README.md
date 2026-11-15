@@ -142,7 +142,9 @@ Two worlds are equal when they have the same kinds, rules and constraints, and t
 | `world town_a` | holds another world as an object |
 | `? person p lives_in york and not p knows person q` | asks: a value, yes or no, or every match |
 | `? in town_a: harbor.knows` | asks inside a held world |
-| `person@york` | the person called york, when a city shares the handle |
+| `kind city [ home_of: person by lives_in ]` | a relation read from the other end, never stated |
+| `kind number [ aged: person by age ]` | numbers are read from the same way: `24.aged` |
+| `person@york` | the person called york, when a city shares the handle and the place doesn't settle it |
 | `the harbor [ lives_in: bath ]` | points at the one object a description fits |
 
 Values: `harbor.knows.age` follows relations, and `name@emmy.person` picks an object by its kind first; `+ - * / div mod`, `< > <= >= = !=`, `count`, `sum`, `min`, `max`. Numbers are exact (`1 / 3` stays a third). There are no booleans, no null and no lists: truth is whether a fact exists.

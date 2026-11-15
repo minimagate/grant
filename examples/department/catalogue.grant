@@ -5,47 +5,56 @@ area analysis
 area geometry
 area logic
 
+subject linear_algebra
+subject analysis_i
+subject logic
+subject analysis_ii
+subject group_theory
+subject topology
+subject galois_theory
+subject differential_geometry
+
 course linear_algebra [
-  title:    "Linear Algebra"
+  subject:  linear_algebra
   credits:  9
   area:     algebra
 ]
 course analysis_1 [
-  title:    "Analysis I"
+  subject:  analysis_i
   credits:  12
   area:     analysis
 ]
 course logic_1 [
-  title:    "Logic"
+  subject:  logic
   credits:  6
   area:     logic
 ]
 course analysis_2 [
-  title:     "Analysis II"
+  subject:   analysis_ii
   credits:   12
   area:      analysis
   requires:  analysis_1
 ]
 course group_theory [
-  title:     "Group Theory"
+  subject:   group_theory
   credits:   6
   area:      algebra
   requires:  linear_algebra
 ]
 course topology [
-  title:     "Topology"
+  subject:   topology
   credits:   9
   area:      geometry
   requires:  analysis_1
 ]
 course galois_theory [
-  title:     "Galois Theory"
+  subject:   galois_theory
   credits:   6
   area:      algebra
   requires:  group_theory
 ]
 course differential_geometry [
-  title:     "Differential Geometry"
+  subject:   differential_geometry
   credits:   9
   area:      geometry
   requires:  topology, analysis_2, linear_algebra
@@ -59,3 +68,4 @@ never circular: course c where c needs c
 ? course c and not c requires course p
 ? sum galois_theory.needs.credits
 ? area@algebra.course
+? subject@logic.course

@@ -1,6 +1,6 @@
 # Grant — Foundation Specification
 
-Foundation 1 · 14 Nov 2026 · Michi
+Foundation 1 · 15 Nov 2026 · Michi
 
 Grant is a language for describing worlds and changing them.
 
@@ -48,7 +48,7 @@ Grant rests on one act: **stating**. A world is made of what has been stated in 
    Worlds are compared and combined as structures, so what a thing is cannot depend on what it is called. An object is what it is because of where it was stated into being. Names and descriptions point at it, and its index numbers it, but neither is it.
 
 6. **Every line is a statement.**
-   Writing Grant is the act of stating, so every line states something about the world: a fact, a change, a definition or a question. Each one reads as a sentence, and symbols appear only where they carry meaning: `[ | ]`, `:`, `.`, `?`, `+`, `-`.
+   Writing Grant is the act of stating, so every line states something about the world: a fact, a change, a definition or a question. Each one reads as a sentence, and symbols appear only where they carry meaning: `[ | ]`, `:`, `.`, `@`, `?`, `+`, `-`.
 
 ---
 
@@ -59,7 +59,7 @@ This is everything Grant gives you. Anything not on this list is written in Gran
 | Area | Primitives |
 | --- | --- |
 | Building | `from` |
-| Things | `kind` with a shape (relation → how many + value kind), objects with a handle, `the` |
+| Things | `kind` with a shape (relation → how many + value kind, or `by` another relation), objects with a handle, `@`, `the` |
 | Facts | `subject relation value`, brackets (create and set), `+`, `-`, `each … where` |
 | Logic | `rule … if`, `never … where`, `and`, `or`, `not`, `( )`, variables introduced with a kind |
 | Values | dots, `=`, `!=`, `count`, `sum`, `min`, `max`; arithmetic and order come with `numbers` and `text` |
@@ -127,6 +127,8 @@ A world without `from numbers` has no numbers.
 | `text` | `text` | written content, `+` to join, `< > <= >=` (alphabetical) | `"Linear Algebra"` |
 | `id` | `id` | one index per number, related to every object with that number | `id.1` |
 
+A number or a text holds no facts of its own, but it can be read from. A world declares what reads it with `by` (section 5): `kind number [ aged: person by age ]` makes `24.aged` everyone aged 24.
+
 Time is not a primitive: a date is a number of days, and a calendar is a world built on `numbers`, using `div` and `mod`.
 
 What Grant doesn't need: **no booleans** (truth is whether a fact exists), **no null** (a missing value is a missing fact), **no lists** (a relation can hold any number of values).
@@ -190,6 +192,8 @@ never sensible_age:        person p where p.age < 0 or p.age > 150
 
 - **Shapes are closed.** Reading a kind tells you every relation its objects can have and how many values each holds. A relation not in the shape is an error, and so is a value of the wrong kind.
 - **Stated and derived share a shape.** `knows` holds stated facts, and the `mutual` rule adds the other direction; both are just `knows: person`.
+- **A relation can be read from the other end.** `kind city [ home_of: person by lives_in ]` declares `home_of`, which is never stated: a city's `home_of` is everyone whose `lives_in` is that city. It is read wherever a relation is, `york.home_of` and `city c home_of person p`, and stating it, removing it or deriving it with a rule is an error. The relation it reads must take this kind, and can't be removed or given another kind while it is read. The words count what is read: `home_of: some person by lives_in` fails for an empty city.
+- **Numbers and text are read from with `by` only.** `kind number [ aged: person by age ]` makes `24.aged` everyone aged 24; a number can have no stated relation.
 - **Brackets can span lines.** A new line works like `|`; short shapes stay on one line.
 - **The end of the world is the checkpoint.** Constraints, the words in shapes, and any disagreement left by merging parents (section 11) are checked once, on the finished structure.
 - **Constraints have names**, so they can be replaced and removed like rules. A shape's words change with the shape: `kind person [ + age: maybe number ]`.
@@ -224,7 +228,7 @@ harbor knows laurie
 - **Things must exist before they are mentioned.** `harbor lives_in york` is an error if `york` doesn't exist yet.
 - **Comments** start with `--` and run to the end of the line.
 - **Names are written in small letters**, with `_` between words: `lives_in`, `linear_algebra`, `emmy`. Capitals belong inside text: `"Linear Algebra"`.
-- **What things share is a thing, not a text.** A name is an object: `name emmy`, then `noether [ name: name@emmy ]`. One person has one name and a name can have many people. A fact is stated from one end; a rule gives the other: `rule bearer: name n person person p if p name n` makes `name@emmy.person` everyone called emmy.
+- **What things share is a thing, not a text.** A name is an object: `name emmy`, then `noether [ name: emmy ]`. One person has one name and a name can have many people. A fact is stated from one end and read from both: `kind name [ person: person by name ]` makes `name@emmy.person` everyone called emmy.
 
 ### Pointing at things
 
@@ -239,6 +243,8 @@ person@york knows liz
 ```
 
 `@` goes from a kind to one of its objects; `.` goes from an object along a relation. So `name@emmy.person` is the name emmy, then everyone who bears it. `person@york` is exactly `the person york [ ]`.
+
+Where the place already says which kind it takes, a shared handle needs no `@`. A value takes the kind of its relation, so in `person york [ lives_in: york ]` the second york is the city; the same holds in a description after `the` and for a handle compared with a value, as in `p.lives_in = york`. A subject is whichever object has the relations the line uses, so `york knows liz` and `york.knows` are about the person. A bare `? york` or `- york`, where either could be meant, is an error that suggests `city@york` or `person@york`.
 
 When objects of the same kind share a handle, describe the one you mean with `the`:
 
@@ -280,7 +286,7 @@ harbor.knows.lives_in      -- york, bath
 | `+ - * /`, `( )` | `numbers` | `(harbor.age + 1) * 2` |
 | `div`, `mod` | `numbers` | `17 div 5` → 3, `17 mod 5` → 2 |
 | `< > <= >=` | `numbers`, `text` | `harbor.age >= 18` |
-| `+` (joins) | `text` | `linear_algebra.title + " II"` |
+| `+` (joins) | `text` | `"linear " + "algebra"` |
 
 `* / div mod` come before `+ -`, then comparisons, then `not`, then `and`, then `or`. Numbers are exact: `1 / 3` stays a third. A `-` at the start of a line removes; anywhere else it is minus.
 
@@ -408,6 +414,8 @@ kind person [ + age: maybe number ]  -- an existing relation: sets how many and 
 kind person [ - age ]                -- refused while any person has an age
 - kind feeling                       -- refused while anything uses feeling
 ```
+
+Stating a kind again adds the relations it lacks, which is how a relation that mentions a later kind is declared: `kind city`, then `kind person [ lives_in: one city ]`, then `kind city [ home_of: person by lives_in ]`. Changing a relation that is already declared needs `+`.
 
 `- kind` is refused while anything still uses the kind: objects of it, another kind's shape, or a rule. A world never loses half its contents by surprise.
 
@@ -588,6 +596,7 @@ Every statement changes K, O, F or R of its world. Derived facts follow after ea
 | --- | --- | --- |
 | `from a, b` | K, O, F, R | starts the world as the union of its parents |
 | `kind person [ … ]` | K | adds the kind and declares its relations, how many values each holds and of what kind |
+| `kind city [ r: k by s ]` | K | declares r as the relation s of kind k read from the other end; nothing is stored for it |
 | `kind person [ + r: k ]` / `[ - r ]` | K | declares a relation or sets how many and its value kind / removes it (refused while facts use it) |
 | `- kind person` | K | removes the kind; refused if anything uses it |
 | `person harbor [ … ]` | O, F | new object with its origin, kind, handle and index; one fact per bracket value |
@@ -666,7 +675,10 @@ harbor [ lives_in: bath | age: harbor.age + 1 ]
 | A parent has errors | `town` has errors; fix it first |
 | A name is used before it is created | `york` doesn't exist yet |
 | A name pointed at something a parent removed | harbor doesn't exist (removed in town) |
-| A bare handle fits objects of several kinds | 2 objects called york; write `city@york` or `person@york` |
+| A bare handle fits objects of several kinds, and the place doesn't settle which | 2 objects called york; write `city@york` or `person@york` |
+| A `by` relation is stated | `home_of` is read from `lives_in`; state `lives_in` on the other end |
+| A `by` relation reads a relation that doesn't take this kind | `home_of` reads `knows` backwards, so person needs `knows: city` |
+| A number or a text is given a stated relation | a number has no relations of its own; it can only be read from, with `by` |
 | A bare handle fits several objects of one kind | 2 objects called harbor; use `the` |
 | `the` fits none or several | no / 2 people match this description |
 | A relation isn't in the kind's shape | person has no relation `favourite_colour` |
@@ -680,6 +692,7 @@ harbor [ lives_in: bath | age: harbor.age + 1 ]
 | A constraint is broken at the end of the world | harbor has 2 `lives_in` (person: `lives_in: one city`) |
 | A merge disagreement is left at the end | rule `calm` differs between move_bath and move_brighton; restate it |
 | `- kind` or a shape removal while still in use | 3 people still use `person` |
+| A relation read with `by` is removed or given another kind | `lives_in` can't go: city still reads it (`home_of: person by lives_in`) |
 | A held world is changed | town_a is held, not built on; write a world `from town_a` |
 | A world builds on or holds itself | town_a → europe → town_a |
 
@@ -703,7 +716,7 @@ statement  = kind_decl | kind_edit | "-" "kind" kind
 kind_decl  = "kind" kind [ "[" field { sep field } "]" ]
 kind_edit  = "kind" kind "[" edit { sep edit } "]"
 edit       = "+" field | "-" relation
-field      = relation ":" [ "one" | "maybe" | "some" | "many" ] kind
+field      = relation ":" [ "one" | "maybe" | "some" | "many" ] kind [ "by" relation ]
 
 object     = kind handle [ values ]
 fact       = [ "+" ] ref relation expr
@@ -750,10 +763,12 @@ sep        = "|" | newline
 | What identifies a kind, relation, rule or constraint? | Its name. |
 | Does equality compare names? | No. Equality compares shape. |
 | Is the index per kind or per world? | Per kind, and it can repeat after a merge. It numbers; it never identifies. |
-| How is one of several objects sharing a handle named? | By its kind, `person@york`, when the kinds differ; with `the` and a description when they don't. |
+| How is one of several objects sharing a handle named? | By the place, when it settles the kind; otherwise by its kind, `person@york`, or with `the` and a description when the kinds are the same. |
+| How is something many things share written? | As a thing, not a text: a name is an object, so it can be read from. |
+| How is a relation read from the other end? | With `by` in the shape of the other kind. It is never stated, and numbers and text can have only these. |
 
 ## 18. Beyond the foundation
 
 - **Standard worlds written in Grant:** time and calendars, ordered collections, common constraints. They are ordinary worlds, built only from the primitives.
-- **The interpreter:** a Rust implementation that runs worlds, re-runs children when parents change, and reports errors with their cause.
+- **A faster interpreter:** the Rust implementation runs worlds, re-runs children when parents change, and reports errors with their cause. It derives facts naively; larger worlds will want incremental derivation.
 - **Comparing large worlds:** equality of shape is a matching problem. Worlds that share an ancestor can be compared by origin first, which is fast; unrelated worlds need the full match.

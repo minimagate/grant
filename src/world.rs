@@ -268,8 +268,17 @@ impl World {
     }
 
     /// Checks a value against the shape before it is stated.
-    pub fn check_value(&self, kind: &Sym, rel: &Sym, value: &Value) -> Res<()> {
+    /// The declaration of a relation a line states; a `by` relation is only ever read.
+    pub fn stated(&self, kind: &str, rel: &str) -> Res<&Field> {
         let field = self.relation(kind, rel)?;
+        match &field.by {
+            Some(by) => Err(format!("`{rel}` is read from `{by}`; state `{by}` on the other end")),
+            None => Ok(field),
+        }
+    }
+
+    pub fn check_value(&self, kind: &Sym, rel: &Sym, value: &Value) -> Res<()> {
+        let field = self.stated(kind, rel)?;
         if self.is_disputed(kind, rel) || self.fits(&field.kind, value) {
             return Ok(());
         }
@@ -292,6 +301,15 @@ impl World {
                 None => format!("`{handle}` doesn't exist yet"),
             }),
             several => Err(format!("{} objects called {handle}; {}", several.len(), self.tell_apart(handle, several))),
+        }
+    }
+
+    /// The object a handle names where the place settles its kind: of the objects sharing it, the
+    /// one whose kind fits. Otherwise, as `resolve`.
+    pub fn resolve_where(&self, handle: &str, fits: impl Fn(&Sym) -> bool) -> Res<ObjId> {
+        match self.find(handle).into_iter().filter(|id| fits(&self.objects[id].kind)).collect::<Vec<_>>().as_slice() {
+            [id] => Ok(*id),
+            _ => self.resolve(handle),
         }
     }
 
@@ -421,6 +439,12 @@ impl World {
 
     /// A value as Grant shows it: numbers and text as written, objects by their handle.
     pub fn show(&self, value: &Value) -> String {
+        self.show_as(value, false)
+    }
+
+    /// As `show`, but where the kind is already plain (an answer of one kind, a variable's
+    /// value) a handle other kinds share is shown bare.
+    pub fn show_as(&self, value: &Value, kind_plain: bool) -> String {
         match value {
             Value::Num(n) => n.to_string(),
             Value::Text(t) => format!("{t:?}"),
@@ -428,7 +452,7 @@ impl World {
                 Some((world, object)) if world.find(&object.handle).len() > 1 => {
                     let same_kind = |o: &ObjId| world.objects[o].kind == object.kind;
                     if world.find(&object.handle).iter().filter(|o| same_kind(o)).count() == 1 {
-                        return format!("{}@{}", object.kind, object.handle);
+                        return if kind_plain { object.handle.to_string() } else { format!("{}@{}", object.kind, object.handle) };
                     }
                     // Indexes can repeat after a merge; then the world that made it tells them apart.
                     let twin = |o: &ObjId| same_kind(o) && world.objects[o].index == object.index;
