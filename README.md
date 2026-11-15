@@ -91,8 +91,8 @@ Errors name the world, the line and the cause. A failing parent is reported with
 ```
 error in child (child.grant, line 1): `town` has errors; fix it first
     1 | from town
-error in town (town.grant, line 11): `venice` doesn't exist yet
-   11 | harbor lives_in venice
+error in town (town.grant, line 11): `durham` doesn't exist yet
+   11 | harbor lives_in durham
 ```
 
 In the REPL every line is a statement, as in a file. `:check` runs the end-of-world checks, `:show` prints what has been stated, and `:save name` writes your lines to `name.grant`.
@@ -134,15 +134,15 @@ Two worlds are equal when they have the same kinds, rules and constraints, and t
 | `kind person [ + email: maybe text \| - age ]` | changes a shape |
 | `person harbor [ age: 24 ]` | creates an object |
 | `harbor knows liz` | adds a fact |
-| `harbor [ lives_in: rome \| knows: + robin, - liz ]` | sets values; `+` and `-` add and remove single ones |
+| `harbor [ lives_in: bath \| knows: + robin, - liz ]` | sets values; `+` and `-` add and remove single ones |
 | `- harbor knows liz` · `- harbor knows` · `- harbor` | removes a fact, a relation's values, an object |
 | `each person p where p.age < 18 [ age: p.age + 1 ]` | the same change on every match |
 | `rule adult: person p is adult if p.age >= 18` | a fact that follows |
 | `never sensible: person p where p.age > 150` | a pattern that must have no matches at the end |
 | `world town_a` | holds another world as an object |
-| `? person p lives_in pisa and not p knows person q` | asks: a value, yes or no, or every match |
+| `? person p lives_in york and not p knows person q` | asks: a value, yes or no, or every match |
 | `? in town_a: harbor.knows` | asks inside a held world |
-| `the harbor [ lives_in: rome ]` | points at the one object a description fits |
+| `the harbor [ lives_in: bath ]` | points at the one object a description fits |
 
 Values: `harbor.knows.age` follows relations; `+ - * / div mod`, `< > <= >= = !=`, `count`, `sum`, `min`, `max`. Numbers are exact (`1 / 3` stays a third). There are no booleans, no null and no lists: truth is whether a fact exists.
 

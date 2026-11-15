@@ -546,7 +546,7 @@ mod tests {
         assert!(matches!(stmt("harbor [ knows: + robin, - liz ]"), Ok(Stmt::Set { .. })));
         assert!(matches!(stmt("- harbor knows"), Ok(Stmt::Remove { rel: Some(_), value: None, .. })));
         assert!(matches!(stmt("world towns/town_a"), Ok(Stmt::Create { path: Some(_), .. })));
-        assert!(matches!(stmt("the harbor [ lives_in: rome ] knows liz"), Ok(Stmt::Fact { subj: Expr::The(_), .. })));
+        assert!(matches!(stmt("the harbor [ lives_in: bath ] knows liz"), Ok(Stmt::Fact { subj: Expr::The(_), .. })));
         assert_eq!(stmt("harbor.knows").unwrap_err(), "this value isn't used");
         assert_eq!(stmt("harbor").unwrap_err(), "this value isn't used");
     }

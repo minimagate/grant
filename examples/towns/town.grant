@@ -4,9 +4,9 @@ kind city
 kind feeling
 kind person [ age: one number | lives_in: one city | feels: feeling | knows: person ]
 
-city pisa
-city rome
-city florence
+city york
+city bath
+city brighton
 feeling happy
-person harbor [ age: 24 | lives_in: pisa ]
-person liz    [ age: 27 | lives_in: pisa | feels: happy ]
+person harbor [ age: 24 | lives_in: york ]
+person liz    [ age: 27 | lives_in: york | feels: happy ]

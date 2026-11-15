@@ -16,7 +16,7 @@ A decision marked **(extension)** adds something the grammar doesn't list.
 
 5. **Numbers are exact rationals** held in 128 bits each for numerator and denominator. A result that doesn't fit is an error ("this number is too large to keep exact"), never a rounded value. Terminating decimals print as decimals (`28.5`), everything else as a fraction (`1/3`). `div` rounds down and `mod` takes the sign of the divisor, also for negative and fractional numbers, which is what calendars need.
 
-6. **Text orders alphabetically**: letters first whatever their case (`"alice" < "Zed"`), and capitals before small letters only to break a tie. Text is shown in quotes, to tell `"pisa"` from the object pisa.
+6. **Text orders alphabetically**: letters first whatever their case (`"alice" < "Zed"`), and capitals before small letters only to break a tie. Text is shown in quotes, to tell `"york"` from the object york.
 
 ## Reading a line
 
@@ -86,7 +86,7 @@ A decision marked **(extension)** adds something the grammar doesn't list.
 
 ## Showing
 
-34. **Things of one kind are shown in index order**; mixed kinds in order of creation. When several objects share a handle they are shown with kind and index, `harbor (person 4)`, and with the world that made them when the index repeats after a merge, `robin (person 2 from move_rome)`.
+34. **Things of one kind are shown in index order**; mixed kinds in order of creation. When several objects share a handle they are shown with kind and index, `harbor (person 4)`, and with the world that made them when the index repeats after a merge, `robin (person 2 from move_bath)`.
 
 35. **A line may nest 120 levels deep** (parentheses, `not`, `count ( … )`). Deeper is refused: "this line nests too deeply".
 

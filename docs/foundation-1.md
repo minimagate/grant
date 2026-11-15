@@ -137,7 +137,7 @@ Every object is numbered within its kind, in the order it was created: the first
 
 ```
 ? harbor.id                     -- 3   (liz 1, laurie 2, harbor 3)
-? id.1                          -- every object numbered 1: pisa, happy, peace, liz
+? id.1                          -- every object numbered 1: york, happy, peace, liz
 ? person p and p.id < 3         -- liz, laurie
 ```
 
@@ -201,27 +201,27 @@ never sensible_age:        person p where p.age < 0 or p.age > 150
 An object is created with its kind and a handle. Characteristics and relationships are the same thing, and brackets are a compact way to state several:
 
 ```
-city pisa
+city york
 person liz
 person laurie
-person harbor [ age: 24 | lives_in: pisa | knows: liz, laurie ]
+person harbor [ age: 24 | lives_in: york | knows: liz, laurie ]
 ```
 
 is exactly
 
 ```
-city pisa
+city york
 person liz
 person laurie
 person harbor
 harbor age 24
-harbor lives_in pisa
+harbor lives_in york
 harbor knows liz
 harbor knows laurie
 ```
 
 - **A fact is** `subject relation value`. Relations are one word, with `_` between parts: `lives_in`, `is_friends_with`.
-- **Things must exist before they are mentioned.** `harbor lives_in pisa` is an error if `pisa` doesn't exist yet.
+- **Things must exist before they are mentioned.** `harbor lives_in york` is an error if `york` doesn't exist yet.
 - **Comments** start with `--` and run to the end of the line.
 - **What things share is a thing, not a text.** A name is an object: `name Emmy`, then `noether [ name: Emmy ]`. One person has one name and a name can have many people. A fact is stated from one end; a rule gives the other: `rule bearer: name n person person p if p name n` makes `Emmy.person` everyone called Emmy.
 
@@ -230,11 +230,11 @@ harbor knows laurie
 A bare handle works when exactly one object has it. When several do, describe the one you mean with `the`:
 
 ```
-person harbor [ lives_in: pisa ]
-person harbor [ lives_in: rome ]
+person harbor [ lives_in: york ]
+person harbor [ lives_in: bath ]
 
-the harbor [ lives_in: rome ] knows liz
-the person harbor [ lives_in: pisa ] feels happy
+the harbor [ lives_in: bath ] knows liz
+the person harbor [ lives_in: york ] feels happy
 ```
 
 `the` means exactly one thing fits. If none or several fit, Grant stops and says so. After `the`, brackets describe which thing you mean; they don't change it.
@@ -249,9 +249,9 @@ the person harbor [ lives_in: pisa ] feels happy
 
 ```
 harbor.age                 -- 24
-harbor.lives_in            -- pisa
+harbor.lives_in            -- york
 harbor.knows               -- liz, laurie
-harbor.knows.lives_in      -- pisa, rome
+harbor.knows.lives_in      -- york, bath
 ```
 
 - A dot gives every value of the relation: none, one or several.
@@ -261,7 +261,7 @@ harbor.knows.lives_in      -- pisa, rome
 
 | Operator | Comes with | Example |
 | --- | --- | --- |
-| `=`, `!=` | every kind | `harbor.lives_in = pisa`, `a != b` |
+| `=`, `!=` | every kind | `harbor.lives_in = york`, `a != b` |
 | `+ - * /`, `( )` | `numbers` | `(harbor.age + 1) * 2` |
 | `div`, `mod` | `numbers` | `17 div 5` → 3, `17 mod 5` → 2 |
 | `< > <= >=` | `numbers`, `text` | `harbor.age >= 18` |
@@ -326,8 +326,8 @@ rule popular:    person p is popular if
 | `? count harbor.knows` | 2 |
 | `? harbor is_at peace` | yes or no |
 | `? person p is_at peace` | every p that fits |
-| `? person p lives_in pisa and not p feels happy` | every p that fits |
-| `? the harbor [ lives_in: rome ] knows liz` | yes or no |
+| `? person p lives_in york and not p feels happy` | every p that fits |
+| `? the harbor [ lives_in: bath ] knows liz` | yes or no |
 | `? in town_a: harbor feels happy` | yes or no, inside town_a |
 
 Running a world shows its own questions only. A parent's questions are not repeated in its children.
@@ -342,14 +342,14 @@ Running a world shows its own questions only. A parent's questions are not repea
 
 ```
 + harbor knows robin            -- adds: harbor knows liz, laurie, robin
-harbor [ lives_in: rome ]       -- brackets set: rome replaces pisa
+harbor [ lives_in: bath ]       -- brackets set: bath replaces york
 harbor [ knows: + robin, - liz ]
 - harbor knows liz              -- one fact
 - harbor knows                  -- every knows from harbor
 - harbor                        -- harbor and every fact touching it
 ```
 
-- **Sentences add, brackets set.** `+ harbor lives_in rome` would give harbor two homes and break `lives_in: one city`; `harbor [ lives_in: rome ]` replaces every value. Inside brackets, `+` and `-` add and remove single values.
+- **Sentences add, brackets set.** `+ harbor lives_in bath` would give harbor two homes and break `lives_in: one city`; `harbor [ lives_in: bath ]` replaces every value. Inside brackets, `+` and `-` add and remove single values.
 - **`-` removes only what was stated.** If the fact still follows from a rule, it stays true and Grant says so: "removed, but it still follows from rule mutual".
 - **Removing what isn't there does nothing.** Stating something about what isn't there is an error.
 
@@ -359,7 +359,7 @@ harbor [ knows: + robin, - liz ]
 harbor [ age: harbor.age + 1 ]                              -- his age becomes his age plus one
 harbor [ knows: + laurie.knows ]                            -- harbor meets everyone laurie knows
 each person p [ age: p.age + 1 ]                            -- a year passes
-each person p where p.lives_in = pisa [ age: p.age + 1 ]
+each person p where p.lives_in = york [ age: p.age + 1 ]
 - each person p feels                                       -- nobody feels anything
 - each person p where p.age < 18                            -- removes those people
 ```
@@ -373,7 +373,7 @@ Brackets mean three things, decided by what comes before them:
 | --- | --- | --- |
 | kind + new handle | create | `person harbor [ age: 24 ]` |
 | handle, or `each` | set | `harbor [ age: harbor.age + 1 ]` |
-| `the` | describe which one | `the harbor [ lives_in: rome ]` |
+| `the` | describe which one | `the harbor [ lives_in: bath ]` |
 
 ### Rules and constraints
 
@@ -408,7 +408,7 @@ Each world is written in one `.grant` file and is named by it: `town.grant` is t
 -- move
 from town
 
-harbor [ lives_in: rome ]
+harbor [ lives_in: bath ]
 ```
 
 `from` comes first and lists every parent. The world starts as its parents' structures and then runs its own lines. It inherits everything: kinds, objects, facts, rules and constraints. Its lines can change any of it, including removing an inherited rule or constraint. Nothing it does reaches back into `town`.
@@ -421,25 +421,25 @@ Edits flow forward. When `town` changes, every world built on it runs again on t
 
 Because a child is instructions, most of it keeps its meaning:
 
-- `harbor [ lives_in: rome ]` still sets rome, whatever town now says harbor's home is.
+- `harbor [ lives_in: bath ]` still sets bath, whatever town now says harbor's home is.
 - `- harbor feels happy` does nothing if town no longer says it.
 - `harbor knows robin` still adds.
 
-Some lines can stop making sense. If town removes harbor, `harbor [ lives_in: rome ]` now points at nothing, and the child fails with an error that names the cause: "harbor doesn't exist (removed in town)". Grant never guesses what a broken line meant.
+Some lines can stop making sense. If town removes harbor, `harbor [ lives_in: bath ]` now points at nothing, and the child fails with an error that names the cause: "harbor doesn't exist (removed in town)". Grant never guesses what a broken line meant.
 
 ### Several parents
 
 ```
 -- both
-from move_rome, move_florence
+from move_bath, move_brighton
 ```
 
 A world with several parents starts from their **union**: every kind, object, fact, rule and constraint that any parent has. Order doesn't matter: `from a, b` and `from b, a` are the same world.
 
-- **Same origin, same object.** harbor in move_rome and harbor in move_florence both come from town, so the child has one harbor carrying the facts of both.
-- **Different origin, different objects.** If each parent created its own robin, the child has two marcos, and `the` tells them apart.
+- **Same origin, same object.** harbor in move_bath and harbor in move_brighton both come from town, so the child has one harbor carrying the facts of both.
+- **Different origin, different objects.** If each parent created its own robin, the child has two robins, and `the` tells them apart.
 - **Same name, same vocabulary.** A kind declared in both parents is one kind, and its shape has every relation either parent declared. Rules and constraints with the same name are one rule or constraint.
-- **A merge keeps what either parent says.** If move_rome removed `harbor feels happy` and move_florence still has it, the child has it. To remove it, the child removes it.
+- **A merge keeps what either parent says.** If move_bath removed `harbor feels happy` and move_brighton still has it, the child has it. To remove it, the child removes it.
 
 ### Disagreement is settled at the end
 
@@ -447,7 +447,7 @@ A merge never fails on its own line. Parents can disagree in three ways, and all
 
 | Disagreement | Example | The child settles it with |
 | --- | --- | --- |
-| Facts break a constraint | harbor lives_in rome and florence; `lives_in: one city` fails | `harbor [ lives_in: rome ]` |
+| Facts break a constraint | harbor lives_in bath and brighton; `lives_in: one city` fails | `harbor [ lives_in: bath ]` |
 | A rule or constraint has two definitions | `calm` differs between parents | `rule calm: …` (restating replaces both) |
 | A relation is declared two ways | `age: one number` and `age: maybe text` | `kind person [ + age: one number ]` |
 
@@ -462,31 +462,31 @@ from numbers, text
 kind city
 kind person [ age: one number | lives_in: one city ]
 
-city pisa
-city rome
-city florence
-person harbor [ age: 24 | lives_in: pisa ]
+city york
+city bath
+city brighton
+person harbor [ age: 24 | lives_in: york ]
 ```
 
 ```
--- move_rome
+-- move_bath
 from town
-harbor [ lives_in: rome ]
+harbor [ lives_in: bath ]
 ```
 
 ```
--- move_florence
+-- move_brighton
 from town
-harbor [ lives_in: florence ]
+harbor [ lives_in: brighton ]
 ```
 
 ```
 -- both
-from move_rome, move_florence
--- harbor lives_in rome and florence here: one city would fail at the end
+from move_bath, move_brighton
+-- harbor lives_in bath and brighton here: one city would fail at the end
 
-harbor [ lives_in: rome ]
-? harbor.lives_in             -- rome
+harbor [ lives_in: bath ]
+? harbor.lives_in             -- bath
 ```
 
 Editing `town` to make harbor 25 changes all four worlds: every child runs again, and `? harbor.age` is 25 everywhere.
@@ -506,7 +506,7 @@ from town_a          -- this world is town_a, plus its own lines
 world town_a         -- town_a is an object in this world
 ```
 
-`world town_a` makes an object of kind `world`, the way `city pisa` makes a city. This world holds town_a; harbor lives inside town_a, not here. A held world can't be changed from outside: to change it, write a world that builds on it.
+`world town_a` makes an object of kind `world`, the way `city york` makes a city. This world holds town_a; harbor lives inside town_a, not here. A held world can't be changed from outside: to change it, write a world that builds on it.
 
 ### True in a world, true about a world
 
@@ -613,14 +613,14 @@ kind person [
   is_neighbour_of:  person
 ]
 
-city pisa
-city rome
+city york
+city bath
 feeling happy
 condition peace
 
-person liz    [ age: 27 | lives_in: pisa ]
-person laurie [ age: 30 | lives_in: rome ]
-person harbor [ age: 24 | lives_in: pisa | knows: liz, laurie ]
+person liz    [ age: 27 | lives_in: york ]
+person laurie [ age: 30 | lives_in: bath ]
+person harbor [ age: 24 | lives_in: york | knows: liz, laurie ]
 
 harbor feels happy
 
@@ -632,7 +632,7 @@ rule neighbours: person a is_neighbour_of person b if a.lives_in = b.lives_in an
 ? liz.knows                         -- harbor
 ? person p is_neighbour_of harbor    -- liz
 
-harbor [ lives_in: rome | age: harbor.age + 1 ]
+harbor [ lives_in: bath | age: harbor.age + 1 ]
 - harbor knows liz
 - harbor feels happy
 
@@ -649,7 +649,7 @@ harbor [ lives_in: rome | age: harbor.age + 1 ]
 | --- | --- |
 | A world name doesn't resolve | no world called `town_x` here |
 | A parent has errors | `town` has errors; fix it first |
-| A name is used before it is created | `pisa` doesn't exist yet |
+| A name is used before it is created | `york` doesn't exist yet |
 | A name pointed at something a parent removed | harbor doesn't exist (removed in town) |
 | A bare handle fits several objects | 2 objects called harbor; use `the` |
 | `the` fits none or several | no / 2 people match this description |
@@ -662,7 +662,7 @@ harbor [ lives_in: rome | age: harbor.age + 1 ]
 | A missing value is computed with | harbor has no `age` |
 | Dividing by zero | division by zero |
 | A constraint is broken at the end of the world | harbor has 2 `lives_in` (person: `lives_in: one city`) |
-| A merge disagreement is left at the end | rule `calm` differs between move_rome and move_florence; restate it |
+| A merge disagreement is left at the end | rule `calm` differs between move_bath and move_brighton; restate it |
 | `- kind` or a shape removal while still in use | 3 people still use `person` |
 | A held world is changed | town_a is held, not built on; write a world `from town_a` |
 | A world builds on or holds itself | town_a → europe → town_a |

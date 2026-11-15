@@ -33,21 +33,21 @@ The questions come in two groups, with a change between them.
 | --- | --- | --- |
 | `? harbor is_at peace` | yes | harbor feels happy, and `calm` follows |
 | `? liz.knows` | harbor | nobody stated it; `mutual` derives it |
-| `? person p is_neighbour_of harbor` | liz | both live in pisa |
+| `? person p is_neighbour_of harbor` | liz | both live in york |
 | `? harbor.id` | 3 | harbor is the third person created |
-| `? id.1` | pisa, happy, peace, liz | the first object of each kind |
+| `? id.1` | york, happy, peace, liz | the first object of each kind |
 | `? person p and p.id < 3` | liz, laurie | |
 | `? sum harbor.knows.age / count harbor.knows` | 28.5 | an average is built, not given |
 | `? liz can_reach laurie` | yes | through harbor, by recursion |
 | `? person p is lonely` | nothing | everyone knows someone |
 
-Then harbor moves to rome and turns 25 (`harbor [ lives_in: rome | age: harbor.age + 1 ]`), stops knowing liz, and stops feeling happy.
+Then harbor moves to bath and turns 25 (`harbor [ lives_in: bath | age: harbor.age + 1 ]`), stops knowing liz, and stops feeling happy.
 
 | Question | Shows | Why |
 | --- | --- | --- |
 | `? harbor is_at peace` | no | the fact it followed from is gone |
 | `? harbor.age` | 25 | computed once, on its line |
-| `? person p is_neighbour_of harbor` | laurie | he lives in rome now |
+| `? person p is_neighbour_of harbor` | laurie | he lives in bath now |
 | `? person p is lonely` | liz | she only knew harbor through `mutual` |
 
 ## `towns/`
@@ -56,28 +56,28 @@ Four worlds that show building and merging.
 
 | World | Does |
 | --- | --- |
-| `town` | declares cities, feelings and people; harbor lives in pisa |
-| `move_rome` | builds on `town`; moves harbor to rome and makes him happy |
-| `move_florence` | builds on `town`; moves harbor to florence |
+| `town` | declares cities, feelings and people; harbor lives in york |
+| `move_bath` | builds on `town`; moves harbor to bath and makes him happy |
+| `move_brighton` | builds on `town`; moves harbor to brighton |
 | `both` | builds on both moves |
 
-`both` starts as the union of its parents. harbor is the same harbor in each (same origin), so he carries the facts of both and lives in rome and florence. The first question shows that: `rome, florence`. The shape `lives_in: one city` would fail when the world ends, so `both` settles it with `harbor [ lives_in: rome ]`, and the second question shows `rome`.
+`both` starts as the union of its parents. harbor is the same harbor in each (same origin), so he carries the facts of both and lives in bath and brighton. The first question shows that: `bath, brighton`. The shape `lives_in: one city` would fail when the world ends, so `both` settles it with `harbor [ lives_in: bath ]`, and the second question shows `bath`.
 
 Try `grant watch examples/towns/both` and edit `town.grant`: every world built on it is run again.
 
 ## `compare.grant`
 
-Worlds as objects. It holds `move_rome`, `move_florence` and `town` with `world`, gives the kind `world` a relation `is_happier_than`, and derives it with a rule that counts happy people inside each world.
+Worlds as objects. It holds `move_bath`, `move_brighton` and `town` with `world`, gives the kind `world` a relation `is_happier_than`, and derives it with a rule that counts happy people inside each world.
 
 | Question | Shows | Why |
 | --- | --- | --- |
-| `? move_rome is_happier_than move_florence` | yes | harbor is happy only in `move_rome` |
-| `? world w is_happier_than town` | move_rome | |
-| `? in move_rome: harbor.lives_in` | rome | names inside `in` are that world's |
+| `? move_bath is_happier_than move_brighton` | yes | harbor is happy only in `move_bath` |
+| `? world w is_happier_than town` | move_bath | |
+| `? in move_bath: harbor.lives_in` | bath | names inside `in` are that world's |
 | `? in town: person p feels happy` | liz | |
-| `? move_rome = move_florence` | no | equality compares shape, and the facts differ |
+| `? move_bath = move_brighton` | no | equality compares shape, and the facts differ |
 | `? town = town` | yes | |
-| `? (in move_rome: harbor feels happy) and not (in town: harbor feels happy)` | yes | the same harbor, by origin, in two worlds |
+| `? (in move_bath: harbor feels happy) and not (in town: harbor feels happy)` | yes | the same harbor, by origin, in two worlds |
 
 ## `calendar.grant`
 

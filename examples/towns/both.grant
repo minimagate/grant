@@ -1,5 +1,5 @@
-from move_rome, move_florence
+from move_bath, move_brighton
 
 ? harbor.lives_in
-harbor [ lives_in: rome ]
+harbor [ lives_in: bath ]
 ? harbor.lives_in
