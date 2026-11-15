@@ -19,7 +19,12 @@ pub struct Loader {
 }
 
 fn name_of(path: &Path) -> String {
-    path.file_stem().map_or_else(|| path.to_string_lossy().into_owned(), |s| s.to_string_lossy().into_owned())
+    path.file_stem().unwrap_or(path.as_os_str()).to_string_lossy().into_owned()
+}
+
+/// An error in a file that no statement of it was run for.
+fn error(file: &Path, line: Option<u32>, message: String) -> Error {
+    Error { world: name_of(file), file: Some(file.into()), line: line.map(|n| (n, String::new())), messages: vec![message], cause: None }
 }
 
 impl Loader {
@@ -37,50 +42,34 @@ impl Loader {
     pub fn run(&mut self, file: &Path, shown: &mut Vec<Output>) -> Result<Rc<World>, Error> {
         match file.canonicalize() {
             Ok(path) => self.load(&path, shown),
-            Err(_) => Err(Error {
-                world: name_of(file),
-                file: Some(file.into()),
-                line: None,
-                source: None,
-                messages: vec![format!("there is no file {}", file.display())],
-                cause: None,
-            }),
+            Err(_) => Err(error(file, None, format!("there is no file {}", file.display()))),
         }
     }
 
     /// The world a name stands for, seen from a folder. Its questions are not repeated.
     pub(crate) fn named(&mut self, dir: &Path, name: &str) -> Result<Rc<World>, Fail> {
         let Ok(path) = dir.join(format!("{name}.grant")).canonicalize() else {
-            return Err(Fail::Message(format!("no world called `{name}` here")));
+            return Err(format!("no world called `{name}` here").into());
         };
         if let Some(at) = self.running.iter().position(|p| *p == path) {
             let chain: Vec<String> = self.running[at..].iter().chain([&path]).map(|p| name_of(p)).collect();
-            return Err(Fail::Message(chain.join(" → ")));
+            return Err(chain.join(" → ").into());
         }
         let result = match self.done.get(&path) {
             Some(result) => result.clone(),
             None => self.load(&path, &mut Vec::new()).map_err(Rc::new),
         };
-        result.map_err(|cause| Fail::Parent(format!("`{}` has errors; fix it first", name_of(&path)), cause))
+        result.map_err(|cause| Fail(format!("`{}` has errors; fix it first", name_of(&path)), Some(cause)))
     }
 
     fn load(&mut self, path: &Path, shown: &mut Vec<Output>) -> Result<Rc<World>, Error> {
         self.files.push(path.into());
-        let name = name_of(path);
-        let before_lines = |number: Option<u32>, message: String| Error {
-            world: name.clone(),
-            file: Some(path.into()),
-            line: number,
-            source: None,
-            messages: vec![message],
-            cause: None,
-        };
-        let text = std::fs::read_to_string(path).map_err(|e| before_lines(None, format!("can't read the file: {e}")))?;
+        let text = std::fs::read_to_string(path).map_err(|e| error(path, None, format!("can't read the file: {e}")))?;
         let lines = lex(&text).map_err(|e| match e {
-            LexError::Unclosed(number) => before_lines(Some(number), "a bracket opened here is never closed".into()),
-            LexError::Bad(number, message) => before_lines(Some(number), message),
+            LexError::Unclosed(number) => error(path, Some(number), "a bracket opened here is never closed".into()),
+            LexError::Bad(number, message) => error(path, Some(number), message),
         })?;
-        let mut session = Session::new(&name, path.parent().unwrap_or(Path::new(".")), Some(path));
+        let mut session = Session::new(&name_of(path), path.parent().unwrap_or(Path::new(".")), Some(path));
         self.running.push(path.into());
         let ran = lines.iter().try_for_each(|line| session.run(self, line).map(|outputs| shown.extend(outputs)));
         self.running.pop();

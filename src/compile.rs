@@ -5,7 +5,7 @@ use crate::ast::{Cond, Expr, Head, PTerm};
 use crate::error::Res;
 use crate::eval::{Eval, View};
 use crate::logic::{CCond, CExpr, CThe, Never, Rule, Scope, Var, cond_slots, expr_slots};
-use crate::value::{Sym, Value, a, is_primitive};
+use crate::value::{ObjId, Sym, Value, a, is_primitive};
 use crate::world::World;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -13,6 +13,8 @@ use std::rc::Rc;
 pub struct Compiler<'w> {
     pub world: &'w World,
     pub vars: Vec<Var>,
+    /// The objects the statement names, in the order it names them.
+    pub objects: Vec<ObjId>,
     /// Variables by name, innermost scope last.
     scopes: Vec<HashMap<Sym, usize>>,
     /// The worlds each enclosing `in` may look into, and whether `in` named exactly one.
@@ -21,17 +23,22 @@ pub struct Compiler<'w> {
 
 impl<'w> Compiler<'w> {
     pub fn new(world: &'w World) -> Self {
-        Compiler { world, vars: Vec::new(), scopes: vec![HashMap::new()], inside: Vec::new() }
+        Compiler { world, vars: Vec::new(), objects: Vec::new(), scopes: vec![HashMap::new()], inside: Vec::new() }
     }
 
-    /// Opens the statement: declares the variables it names up front, then those its conditions
-    /// introduce. Returns their slots in order.
-    pub fn open(&mut self, named: &[(&Sym, &Sym)], conds: &[&Cond]) -> Res<Vec<usize>> {
+    /// What evaluates the values and conditions compiled so far.
+    pub fn eval(&self) -> Eval<'_> {
+        Eval { vars: &self.vars, objects: &self.objects }
+    }
+
+    /// Opens the statement: declares the variables it names up front, then those its condition
+    /// introduces. Returns their slots in order.
+    pub fn open(&mut self, named: &[(&Sym, &Sym)], cond: &Cond) -> Res<Vec<usize>> {
         let mut fresh = Vec::new();
         for (kind, var) in named {
-            self.declare(kind, var, false, &mut fresh)?;
+            self.declare(kind, var, &mut fresh)?;
         }
-        self.introduce(conds, &mut fresh)?;
+        self.introduce(cond, &mut fresh)?;
         Ok(fresh)
     }
 
@@ -43,11 +50,14 @@ impl<'w> Compiler<'w> {
         self.inside.is_empty()
     }
 
-    fn is_kind(&self, name: &str) -> bool {
-        match self.inside.last() {
-            None => self.world.kinds.contains_key(name),
-            Some((worlds, _)) => worlds.iter().any(|w| w.kinds.contains_key(name)),
-        }
+    /// Checks that a primitive kind was brought in with `from`. Inside `in w:` that is w's affair.
+    fn need(&self, primitive: &str) -> Res<()> {
+        if self.here() && !self.world.kinds.contains_key(primitive) { Err(self.world.no_kind(primitive)) } else { Ok(()) }
+    }
+
+    fn object(&mut self, id: ObjId) -> CExpr {
+        self.objects.push(id);
+        CExpr::Obj(self.objects.len() - 1)
     }
 
     /// Steps into `in w:`. A named world is looked into alone; a variable may be any held world.
@@ -62,7 +72,7 @@ impl<'w> Compiler<'w> {
             };
             match named {
                 Some(world) => (vec![world], true),
-                None => (from.held().cloned().collect(), false),
+                None => (from.worlds().cloned().collect(), false),
             }
         };
         let next = match self.inside.last() {
@@ -76,12 +86,12 @@ impl<'w> Compiler<'w> {
         self.inside.push(next);
     }
 
-    fn declare(&mut self, kind: &Sym, var: &Sym, foreign: bool, fresh: &mut Vec<usize>) -> Res<()> {
+    fn declare(&mut self, kind: &Sym, var: &Sym, fresh: &mut Vec<usize>) -> Res<()> {
         if let Some(slot) = self.slot(var) {
             let known = &self.vars[slot].kind;
             return if known == kind { Ok(()) } else { Err(format!("`{var}` is {}, not {}", a(known), a(kind))) };
         }
-        if !foreign {
+        if self.here() {
             if !self.world.kinds.contains_key(kind) {
                 return Err(self.world.no_kind(kind));
             }
@@ -92,38 +102,42 @@ impl<'w> Compiler<'w> {
                 return Err(format!("`{var}` is already a kind"));
             }
         }
-        self.vars.push(Var { name: var.clone(), kind: kind.clone(), foreign });
+        self.vars.push(Var { name: var.clone(), kind: kind.clone(), foreign: !self.here() });
         self.scopes.last_mut().unwrap().insert(var.clone(), self.vars.len() - 1);
         fresh.push(self.vars.len() - 1);
         Ok(())
     }
 
-    /// Declares every variable these conditions introduce in the current scope. Scopes inside
-    /// them (`not`, `count`) declare their own.
-    fn introduce(&mut self, conds: &[&Cond], fresh: &mut Vec<usize>) -> Res<()> {
-        for cond in conds {
-            match cond {
-                Cond::And(cs) | Cond::Or(cs) => self.introduce(&cs.iter().collect::<Vec<_>>(), fresh)?,
-                Cond::In(world, body) => {
-                    self.enter(world);
-                    let result = self.introduce(&[body], fresh);
-                    self.inside.pop();
-                    result?;
-                }
-                Cond::Any(kind, var) => self.declare(kind, var, !self.here(), fresh)?,
-                Cond::Pattern { subj, val, .. } => {
-                    for term in [subj, val] {
-                        if let PTerm::Intro(kind, var) = term {
-                            self.declare(kind, var, !self.here(), fresh)?;
-                        }
+    /// Four names in a row: the reading that starts with a kind, if the first name is one.
+    fn meant<'c>(&self, name: &str, as_kind: &'c Cond, as_term: &'c Cond) -> &'c Cond {
+        let is_kind = match self.inside.last() {
+            None => self.world.kinds.contains_key(name),
+            Some((worlds, _)) => worlds.iter().any(|w| w.kinds.contains_key(name)),
+        };
+        if is_kind { as_kind } else { as_term }
+    }
+
+    /// Declares every variable this condition introduces in the current scope. Scopes inside it
+    /// (`not`, `count`) declare their own.
+    fn introduce(&mut self, cond: &Cond, fresh: &mut Vec<usize>) -> Res<()> {
+        match cond {
+            Cond::And(cs) | Cond::Or(cs) => cs.iter().try_for_each(|c| self.introduce(c, fresh))?,
+            Cond::In(world, body) => {
+                self.enter(world);
+                let result = self.introduce(body, fresh);
+                self.inside.pop();
+                result?;
+            }
+            Cond::Any(kind, var) => self.declare(kind, var, fresh)?,
+            Cond::Pattern { subj, val, .. } => {
+                for term in [subj, val] {
+                    if let PTerm::Intro(kind, var) = term {
+                        self.declare(kind, var, fresh)?;
                     }
                 }
-                Cond::Either { name, as_kind, as_term } => {
-                    let meant = if self.is_kind(name) { as_kind } else { as_term };
-                    self.introduce(&[meant], fresh)?;
-                }
-                Cond::Not(_) | Cond::Cmp(..) | Cond::Value(_) => {}
             }
+            Cond::Either { name, as_kind, as_term } => self.introduce(self.meant(name, as_kind, as_term), fresh)?,
+            Cond::Not(_) | Cond::Cmp(..) | Cond::Value(_) => {}
         }
         Ok(())
     }
@@ -131,7 +145,7 @@ impl<'w> Compiler<'w> {
     fn scope(&mut self, inner: &Cond) -> Res<Scope> {
         self.scopes.push(HashMap::new());
         let mut locals = Vec::new();
-        let cond = self.introduce(&[inner], &mut locals).and_then(|()| self.cond(inner));
+        let cond = self.introduce(inner, &mut locals).and_then(|()| self.cond(inner));
         self.scopes.pop();
         let cond = cond?;
         let mut needs = Vec::new();
@@ -165,16 +179,13 @@ impl<'w> Compiler<'w> {
                 }
                 CCond::Pattern { subj, rel: rel.clone(), val, needs }
             }
-            Cond::Either { name, as_kind, as_term } => {
-                let meant = if self.is_kind(name) { as_kind } else { as_term };
-                self.cond(meant)?
-            }
+            Cond::Either { name, as_kind, as_term } => self.cond(self.meant(name, as_kind, as_term))?,
             Cond::Cmp(op, left, right) => {
                 let (left, right) = (self.expr(left)?, self.expr(right)?);
                 let mut needs = Vec::new();
                 expr_slots(&left, &mut needs);
                 expr_slots(&right, &mut needs);
-                CCond::Cmp { op: *op, left, right, needs }
+                CCond::Cmp { op, left, right, needs }
             }
             Cond::Value(_) => return Err("a condition is a fact or a comparison, not a value alone".into()),
         })
@@ -194,20 +205,16 @@ impl<'w> Compiler<'w> {
     pub fn expr(&mut self, e: &Expr) -> Res<CExpr> {
         Ok(match e {
             Expr::Num(n) => {
-                if self.here() {
-                    self.world.need("number")?;
-                }
+                self.need("number")?;
                 CExpr::Const(Value::Num(*n))
             }
             Expr::Text(t) => {
-                if self.here() {
-                    self.world.need("text")?;
-                }
+                self.need("text")?;
                 CExpr::Const(Value::Text(t.clone()))
             }
             Expr::Name(name) => match (self.slot(name), self.inside.last()) {
                 (Some(slot), _) => CExpr::Var(slot),
-                (None, None) => CExpr::Const(Value::Obj(self.world.resolve(name)?)),
+                (None, None) => self.object(self.world.resolve(name)?),
                 (None, Some((worlds, exact))) => {
                     if *exact && worlds[0].find(name).is_empty() {
                         return Err(format!("`{name}` doesn't exist in {}", worlds[0].name));
@@ -216,6 +223,7 @@ impl<'w> Compiler<'w> {
                 }
             },
             Expr::The(the) => {
+                let named = self.objects.len();
                 let mut desc = Vec::new();
                 let mut slots = Vec::new();
                 for (rel, values) in &the.desc {
@@ -225,18 +233,17 @@ impl<'w> Compiler<'w> {
                 }
                 let the = CThe { kind: the.kind.clone(), handle: the.handle.clone(), desc };
                 if self.here() && slots.is_empty() {
-                    // A description without variables points at one object, now.
-                    let model = self.world.model()?;
-                    let view = View { world: self.world, facts: &model.facts };
-                    CExpr::Const(Value::Obj(Eval { vars: &self.vars }.the(&the, &mut vec![None; self.vars.len()], &view)?))
+                    // A description without variables points at one object, now, and only that
+                    // object is named.
+                    let id = self.eval().the(&the, &mut vec![None; self.vars.len()], &View::of(self.world)?)?;
+                    self.objects.truncate(named);
+                    self.object(id)
                 } else {
                     CExpr::The(Box::new(the))
                 }
             }
             Expr::Index(n) => {
-                if self.here() {
-                    self.world.need("id")?;
-                }
+                self.need("id")?;
                 CExpr::Index(*n)
             }
             Expr::Dot(base, rel) => {
@@ -247,10 +254,9 @@ impl<'w> Compiler<'w> {
                 CExpr::Dot(Box::new(base), rel.clone())
             }
             Expr::Neg(e) => CExpr::Neg(Box::new(self.expr(e)?)),
-            Expr::Bin(op, l, r) => CExpr::Bin(*op, Box::new(self.expr(l)?), Box::new(self.expr(r)?)),
-            Expr::Count(e) => CExpr::Count(Box::new(self.expr(e)?)),
-            Expr::CountCond(cond) => CExpr::CountCond(Box::new(self.scope(cond)?)),
-            Expr::Agg(op, e) => CExpr::Agg(*op, Box::new(self.expr(e)?)),
+            Expr::Bin(op, l, r) => CExpr::Bin(op, Box::new(self.expr(l)?), Box::new(self.expr(r)?)),
+            Expr::Agg(op, e) => CExpr::Agg(op, Box::new(self.expr(e)?)),
+            Expr::Count(cond) => CExpr::Count(Box::new(self.scope(cond)?)),
             Expr::In(world, body) => {
                 let looked_into = self.expr(world)?;
                 self.enter(world);
@@ -262,17 +268,17 @@ impl<'w> Compiler<'w> {
     }
 
     /// The kind of a value, when the shapes of this world settle it.
-    pub fn kind_of(&self, e: &CExpr) -> Option<Sym> {
+    fn kind_of(&self, e: &CExpr) -> Option<Sym> {
         if !self.here() {
             return None;
         }
         match e {
             CExpr::Const(value) => Some(self.world.kind_of(value).into()),
+            CExpr::Obj(i) => Some(self.world.objects[&self.objects[*i]].kind.clone()),
             CExpr::Var(slot) => (!self.vars[*slot].foreign).then(|| self.vars[*slot].kind.clone()),
             CExpr::Dot(base, rel) => self.takes(&self.kind_of(base)?, rel).ok()?,
-            CExpr::Neg(_) | CExpr::Count(_) | CExpr::CountCond(_) | CExpr::Agg(crate::ast::AggOp::Sum, _) => Some("number".into()),
-            CExpr::Bin(_, left, _) => self.kind_of(left),
-            CExpr::Agg(_, e) => self.kind_of(e),
+            CExpr::Neg(_) | CExpr::Count(_) | CExpr::Agg("count" | "sum", _) => Some("number".into()),
+            CExpr::Bin(_, e, _) | CExpr::Agg(_, e) => self.kind_of(e),
             CExpr::Handle(_) | CExpr::The(_) | CExpr::Index(_) | CExpr::In(..) => None,
         }
     }
@@ -280,7 +286,7 @@ impl<'w> Compiler<'w> {
     /// The kind of value `kind.rel` takes; `None` while parents disagree on it.
     fn takes(&self, kind: &Sym, rel: &Sym) -> Res<Option<Sym>> {
         if &**rel == "id" {
-            self.world.need("id")?;
+            self.need("id")?;
             return Ok(Some("number".into()));
         }
         if is_primitive(kind) {
@@ -306,7 +312,7 @@ impl<'w> Compiler<'w> {
 /// `rule name: kind var rel val if cond`
 pub fn rule(world: &World, name: &Sym, source: &str, head: &Head, cond: &Cond) -> Res<Rule> {
     let Head { kind, var, rel, val } = head;
-    if world.kinds.contains_key(kind) && !world.is_thing(kind) {
+    if world.has_primitive(kind) {
         return Err(format!("a rule states a fact about a thing, not about {}", a(kind)));
     }
     let mut c = Compiler::new(world);
@@ -314,26 +320,23 @@ pub fn rule(world: &World, name: &Sym, source: &str, head: &Head, cond: &Cond) -
     if let PTerm::Intro(kind, var) = val {
         named.push((kind, var));
     }
-    let subj = c.open(&named, &[cond])?[0];
-    let takes = match world.field(kind, rel) {
-        Some(field) => (!world.is_disputed(kind, rel)).then(|| field.kind.clone()),
-        None => return Err(format!("{kind} doesn't declare `{rel}`")),
-    };
-    let val = c.term(val)?;
-    if let (Some(takes), Some(given)) = (takes, c.kind_of(&val))
-        && given != takes
-        && !(&*takes == "id" && &*given == "number")
-    {
-        return Err(format!("`{rel}` takes {}, not {}", a(&takes), a(&given)));
+    let subj = c.open(&named, cond)?[0];
+    if world.field(kind, rel).is_none() {
+        return Err(format!("{kind} doesn't declare `{rel}`"));
     }
+    let val = c.term(val)?;
+    c.check_fact(&CExpr::Var(subj), rel, &val)?;
     let cond = c.cond(cond)?;
-    Ok(Rule { name: name.clone(), source: source.into(), vars: c.vars, subj, rel: rel.clone(), val, cond })
+    Ok(Rule { name: name.clone(), source: source.into(), vars: c.vars, objects: c.objects, subj, rel: rel.clone(), val, cond })
 }
 
 /// `never name: kind var where cond`
 pub fn never(world: &World, name: &Sym, source: &str, kind: &Sym, var: &Sym, cond: &Cond) -> Res<Never> {
+    if world.has_primitive(kind) {
+        return Err(format!("a constraint is about things, not about {}", a(kind)));
+    }
     let mut c = Compiler::new(world);
-    let subj = c.open(&[(kind, var)], &[cond])?[0];
+    let subj = c.open(&[(kind, var)], cond)?[0];
     let cond = c.cond(cond)?;
-    Ok(Never { name: name.clone(), source: source.into(), vars: c.vars, subj, cond })
+    Ok(Never { name: name.clone(), source: source.into(), vars: c.vars, objects: c.objects, subj, cond })
 }

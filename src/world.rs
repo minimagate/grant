@@ -4,17 +4,14 @@ use crate::ast::Field;
 use crate::error::Res;
 use crate::logic::{Never, Rule};
 use crate::model::{self, Model};
-use crate::value::{ObjId, PRIMITIVES, Sym, Value, a, is_primitive};
-use std::cell::RefCell;
+use crate::value::{ObjId, PRIMITIVES, Sym, Value, a};
+use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 /// A kind's shape: every relation its objects can have.
-#[derive(Clone, PartialEq, Eq, Debug, Default)]
-pub struct Kind {
-    pub fields: BTreeMap<Sym, Field>,
-}
+pub type Shape = BTreeMap<Sym, Field>;
 
 #[derive(Clone)]
 pub struct Object {
@@ -40,44 +37,36 @@ struct Rel {
     by_value: BTreeMap<Value, BTreeSet<ObjId>>,
 }
 
+/// Takes `item` out of the set under `key`, and the set with it once it is empty.
+fn take<K: Ord, T: Ord>(index: &mut BTreeMap<K, BTreeSet<T>>, key: &K, item: &T) -> bool {
+    let Some(set) = index.get_mut(key) else { return false };
+    let found = set.remove(item);
+    if set.is_empty() {
+        index.remove(key);
+    }
+    found
+}
+
 impl Facts {
     pub fn len(&self) -> usize {
         self.len
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
     /// Adds a fact; `false` if it was already there.
     pub fn insert(&mut self, subj: ObjId, rel: &Sym, value: Value) -> bool {
         let r = self.rels.entry(rel.clone()).or_default();
-        if !r.by_subject.entry(subj).or_default().insert(value.clone()) {
-            return false;
-        }
+        let new = r.by_subject.entry(subj).or_default().insert(value.clone());
         r.by_value.entry(value).or_default().insert(subj);
-        self.len += 1;
-        true
+        self.len += new as usize;
+        new
     }
 
     /// Removes a fact; `false` if it wasn't there.
     pub fn remove(&mut self, subj: ObjId, rel: &str, value: &Value) -> bool {
         let Some(r) = self.rels.get_mut(rel) else { return false };
-        let Some(values) = r.by_subject.get_mut(&subj) else { return false };
-        if !values.remove(value) {
-            return false;
-        }
-        if values.is_empty() {
-            r.by_subject.remove(&subj);
-        }
-        if let Some(subjects) = r.by_value.get_mut(value) {
-            subjects.remove(&subj);
-            if subjects.is_empty() {
-                r.by_value.remove(value);
-            }
-        }
-        self.len -= 1;
-        true
+        let found = take(&mut r.by_subject, &subj, value) && take(&mut r.by_value, value, &subj);
+        self.len -= found as usize;
+        found
     }
 
     pub fn contains(&self, subj: ObjId, rel: &str, value: &Value) -> bool {
@@ -97,32 +86,8 @@ impl Facts {
         by_subject.into_iter().flatten().flat_map(|(subj, values)| values.iter().map(|v| (*subj, v)))
     }
 
-    /// Every fact with this subject.
-    pub fn of(&self, subj: ObjId) -> impl Iterator<Item = (&Sym, &Value)> {
-        self.rels.iter().flat_map(move |(rel, r)| r.by_subject.get(&subj).into_iter().flatten().map(move |v| (rel, v)))
-    }
-
     pub fn iter(&self) -> impl Iterator<Item = (ObjId, &Sym, &Value)> {
-        self.rels.iter().flat_map(|(rel, r)| r.by_subject.iter().flat_map(move |(s, vs)| vs.iter().map(move |v| (*s, rel, v))))
-    }
-
-    /// Removes every value of one relation of one subject, and returns them.
-    pub fn clear(&mut self, subj: ObjId, rel: &str) -> Vec<Value> {
-        let values: Vec<Value> = self.values(subj, rel).cloned().collect();
-        for value in &values {
-            self.remove(subj, rel, value);
-        }
-        values
-    }
-
-    /// Removes every fact with this object as subject or value.
-    fn forget(&mut self, id: ObjId) {
-        let object = Value::Obj(id);
-        let touching: Vec<_> =
-            self.iter().filter(|(s, _, v)| *s == id || **v == object).map(|(s, r, v)| (s, r.clone(), v.clone())).collect();
-        for (subj, rel, value) in touching {
-            self.remove(subj, &rel, &value);
-        }
+        self.rels.keys().flat_map(|rel| self.pairs(rel).map(move |(subj, value)| (subj, rel, value)))
     }
 }
 
@@ -138,7 +103,7 @@ pub enum Dispute {
 pub struct World {
     pub id: u32,
     pub name: Sym,
-    pub kinds: BTreeMap<Sym, Kind>,
+    pub kinds: BTreeMap<Sym, Shape>,
     pub objects: BTreeMap<ObjId, Object>,
     /// The stated facts, F. What rules add is in `model()`.
     pub facts: Facts,
@@ -154,7 +119,7 @@ pub struct World {
     created: u32,
     /// Handles of removed objects, and the world that removed them.
     removed: BTreeMap<Sym, Sym>,
-    model: RefCell<Option<Rc<Model>>>,
+    model: OnceCell<Rc<Model>>,
 }
 
 /// A number no other world has. It stands for the world in the identity of the objects it
@@ -170,7 +135,7 @@ impl World {
         World {
             id,
             name: name.into(),
-            kinds: BTreeMap::from([("world".into(), Kind::default())]),
+            kinds: BTreeMap::from([("world".into(), Shape::new())]),
             objects: BTreeMap::new(),
             facts: Facts::default(),
             rules: BTreeMap::new(),
@@ -181,7 +146,7 @@ impl World {
             indexes: BTreeMap::new(),
             created: 0,
             removed: BTreeMap::new(),
-            model: RefCell::new(None),
+            model: OnceCell::new(),
         }
     }
 
@@ -192,21 +157,17 @@ impl World {
         let mut world = World { id, name: name.into(), created: 0, ..first.as_ref().clone() };
         for (n, parent) in rest.iter().enumerate() {
             let earlier = parents[..=n].iter().map(|p| &*p.name).collect::<Vec<_>>().join(", ");
-            for (kind_name, kind) in &parent.kinds {
-                let ours = world.kinds.entry(kind_name.clone()).or_default();
-                for (rel, field) in &kind.fields {
-                    match ours.fields.get(rel) {
-                        None => {
-                            ours.fields.insert(rel.clone(), field.clone());
-                        }
-                        Some(old) if old != field => {
-                            let message = format!(
-                                "`{rel}` of {kind_name} is declared two ways (`{rel}: {old}` in {earlier}, `{rel}: {field}` in {}); restate it with `kind {kind_name} [ + {rel}: … ]`",
-                                parent.name
-                            );
-                            world.disputes.entry(Dispute::Field(kind_name.clone(), rel.clone())).or_insert(message);
-                        }
-                        Some(_) => {}
+            let differs = |what: &str, name: &Sym| format!("{what} `{name}` differs between {earlier} and {}; restate it", parent.name);
+            for (kind, shape) in &parent.kinds {
+                let ours = world.kinds.entry(kind.clone()).or_default();
+                for (rel, field) in shape {
+                    let old = ours.entry(rel.clone()).or_insert_with(|| field.clone());
+                    if old != field {
+                        let message = format!(
+                            "`{rel}` of {kind} is declared two ways (`{rel}: {old}` in {earlier}, `{rel}: {field}` in {}); restate it with `kind {kind} [ + {rel}: … ]`",
+                            parent.name
+                        );
+                        world.disputes.entry(Dispute::Field(kind.clone(), rel.clone())).or_insert(message);
                     }
                 }
             }
@@ -218,28 +179,14 @@ impl World {
             for (subj, rel, value) in parent.facts.iter() {
                 world.facts.insert(subj, rel, value.clone());
             }
-            for (rule_name, rule) in &parent.rules {
-                match world.rules.get(rule_name) {
-                    None => {
-                        world.rules.insert(rule_name.clone(), rule.clone());
-                    }
-                    Some(old) if old != rule => {
-                        let message = format!("rule `{rule_name}` differs between {earlier} and {}; restate it", parent.name);
-                        world.disputes.entry(Dispute::Rule(rule_name.clone())).or_insert(message);
-                    }
-                    Some(_) => {}
+            for (name, rule) in &parent.rules {
+                if world.rules.entry(name.clone()).or_insert_with(|| rule.clone()) != rule {
+                    world.disputes.entry(Dispute::Rule(name.clone())).or_insert_with(|| differs("rule", name));
                 }
             }
-            for (never_name, never) in &parent.nevers {
-                match world.nevers.get(never_name) {
-                    None => {
-                        world.nevers.insert(never_name.clone(), never.clone());
-                    }
-                    Some(old) if old != never => {
-                        let message = format!("never `{never_name}` differs between {earlier} and {}; restate it", parent.name);
-                        world.disputes.entry(Dispute::Never(never_name.clone())).or_insert(message);
-                    }
-                    Some(_) => {}
+            for (name, never) in &parent.nevers {
+                if world.nevers.entry(name.clone()).or_insert_with(|| never.clone()) != never {
+                    world.disputes.entry(Dispute::Never(name.clone())).or_insert_with(|| differs("never", name));
                 }
             }
             for (kind, index) in &parent.indexes {
@@ -253,25 +200,24 @@ impl World {
     }
 
     /// Forgets the derived facts. Every change to the world must end here.
-    fn touch(&self) {
-        *self.model.borrow_mut() = None;
+    fn touch(&mut self) {
+        self.model.take();
     }
 
     /// F ∪ D: the stated facts and everything the rules make follow from them.
-    pub fn model(&self) -> Res<Rc<Model>> {
-        if let Some(model) = &*self.model.borrow() {
-            return Ok(model.clone());
+    pub fn model(&self) -> Res<&Model> {
+        if let Some(model) = self.model.get() {
+            return Ok(model);
         }
         let model = Rc::new(model::derive(self)?);
-        *self.model.borrow_mut() = Some(model.clone());
-        Ok(model)
+        Ok(self.model.get_or_init(|| model))
     }
 
     // --- kinds ---
 
-    /// Whether objects of this kind are made by statements (not numbers, text or indexes).
-    pub fn is_thing(&self, kind: &str) -> bool {
-        self.kinds.contains_key(kind) && !is_primitive(kind)
+    /// Whether this kind is here and is numbers, text or indexes, which no statement makes.
+    pub fn has_primitive(&self, kind: &str) -> bool {
+        self.kinds.contains_key(kind) && PRIMITIVES.iter().any(|(k, _)| *k == kind)
     }
 
     /// What Grant says when a kind is missing.
@@ -280,11 +226,6 @@ impl World {
             Some((_, world)) => format!("this world has no {kind}; add `from {world}`"),
             None => format!("kind `{kind}` doesn't exist yet"),
         }
-    }
-
-    /// Checks that a primitive kind was brought in with `from`.
-    pub fn need(&self, primitive: &str) -> Res<()> {
-        if self.kinds.contains_key(primitive) { Ok(()) } else { Err(self.no_kind(primitive)) }
     }
 
     pub fn declare_kind(&mut self, kind: &Sym) {
@@ -300,7 +241,7 @@ impl World {
 
     /// The declaration of `kind.rel`, if the shape has it.
     pub fn field(&self, kind: &str, rel: &str) -> Option<&Field> {
-        self.kinds.get(kind)?.fields.get(rel)
+        self.kinds.get(kind)?.get(rel)
     }
 
     /// The declaration of `kind.rel`, or what Grant says when the shape lacks it.
@@ -312,17 +253,14 @@ impl World {
         self.disputes.contains_key(&Dispute::Field(kind.clone(), rel.clone()))
     }
 
-    /// Declares a relation or replaces its declaration, which settles any dispute over it.
-    pub fn set_field(&mut self, kind: &Sym, rel: &Sym, field: Field) {
-        self.kinds.entry(kind.clone()).or_default().fields.insert(rel.clone(), field);
-        self.disputes.remove(&Dispute::Field(kind.clone(), rel.clone()));
-        self.touch();
-    }
-
-    pub fn remove_field(&mut self, kind: &Sym, rel: &Sym) {
-        if let Some(k) = self.kinds.get_mut(kind) {
-            k.fields.remove(rel);
-        }
+    /// Declares a relation, replaces its declaration or (with `None`) removes it. Each settles
+    /// any dispute over it.
+    pub fn set_field(&mut self, kind: &Sym, rel: &Sym, field: Option<Field>) {
+        let shape = self.kinds.entry(kind.clone()).or_default();
+        match field {
+            Some(field) => shape.insert(rel.clone(), field),
+            None => shape.remove(rel),
+        };
         self.disputes.remove(&Dispute::Field(kind.clone(), rel.clone()));
         self.touch();
     }
@@ -376,8 +314,16 @@ impl World {
         self.by_kind.get(kind).into_iter().flatten().copied()
     }
 
+    /// The world this object is, if it is a held world.
+    pub fn held(&self, value: &Value) -> Option<&Rc<World>> {
+        match value {
+            Value::Obj(id) => self.objects.get(id)?.held.as_ref(),
+            _ => None,
+        }
+    }
+
     /// The worlds this world holds.
-    pub fn held(&self) -> impl Iterator<Item = &Rc<World>> {
+    pub fn worlds(&self) -> impl Iterator<Item = &Rc<World>> {
         self.of_kind("world").filter_map(|id| self.objects[&id].held.as_ref())
     }
 
@@ -385,32 +331,26 @@ impl World {
         self.by_handle.entry(object.handle.clone()).or_default().insert(id);
         self.by_kind.entry(object.kind.clone()).or_default().insert(id);
         self.objects.insert(id, object);
-    }
-
-    fn number(&mut self, kind: &Sym) -> u64 {
-        let index = self.indexes.entry(kind.clone()).or_default();
-        *index += 1;
-        *index
+        self.touch();
     }
 
     /// Creates an object here: its origin is this world and its place in this world's creations.
     pub fn create(&mut self, kind: &Sym, handle: &Sym) -> ObjId {
         self.created += 1;
-        let id = ObjId { world: self.id, seq: self.created };
-        let index = self.number(kind);
-        self.insert(id, Object { kind: kind.clone(), handle: handle.clone(), index, made_in: self.name.clone(), held: None });
-        self.touch();
-        id
+        self.add(ObjId { world: self.id, seq: self.created }, kind, handle, None)
     }
 
     /// Holds a world as an object. A world is its own origin, so holding it twice holds it once.
     pub fn hold(&mut self, handle: &Sym, world: Rc<World>) -> ObjId {
-        let id = ObjId { world: world.id, seq: 0 };
+        self.add(ObjId { world: world.id, seq: 0 }, &"world".into(), handle, Some(world))
+    }
+
+    fn add(&mut self, id: ObjId, kind: &Sym, handle: &Sym, held: Option<Rc<World>>) -> ObjId {
         if !self.objects.contains_key(&id) {
-            let kind: Sym = "world".into();
-            let index = self.number(&kind);
-            self.insert(id, Object { kind, handle: handle.clone(), index, made_in: self.name.clone(), held: Some(world) });
-            self.touch();
+            let index = self.indexes.entry(kind.clone()).or_default();
+            *index += 1;
+            let object = Object { kind: kind.clone(), handle: handle.clone(), index: *index, made_in: self.name.clone(), held };
+            self.insert(id, object);
         }
         id
     }
@@ -418,15 +358,13 @@ impl World {
     /// Removes an object and every fact touching it.
     pub fn remove_object(&mut self, id: ObjId) {
         let Some(object) = self.objects.remove(&id) else { return };
-        for (index, key) in [(&mut self.by_handle, &object.handle), (&mut self.by_kind, &object.kind)] {
-            if let Some(ids) = index.get_mut(key) {
-                ids.remove(&id);
-                if ids.is_empty() {
-                    index.remove(key);
-                }
-            }
+        take(&mut self.by_handle, &object.handle, &id);
+        take(&mut self.by_kind, &object.kind, &id);
+        let touches = |(s, _, v): &(ObjId, &Sym, &Value)| *s == id || **v == Value::Obj(id);
+        let touching: Vec<_> = self.facts.iter().filter(touches).map(|(s, r, v)| (s, r.clone(), v.clone())).collect();
+        for (subj, rel, value) in touching {
+            self.facts.remove(subj, &rel, &value);
         }
-        self.facts.forget(id);
         self.removed.insert(object.handle, self.name.clone());
         self.touch();
     }
@@ -440,52 +378,48 @@ impl World {
 
     /// Removes a stated fact; `false` if it wasn't stated.
     pub fn unstate(&mut self, subj: ObjId, rel: &str, value: &Value) -> bool {
-        let removed = self.facts.remove(subj, rel, value);
         self.touch();
-        removed
+        self.facts.remove(subj, rel, value)
     }
 
-    /// Removes every stated value of one relation of one subject, and returns them.
-    pub fn clear(&mut self, subj: ObjId, rel: &str) -> Vec<Value> {
-        let values = self.facts.clear(subj, rel);
-        self.touch();
-        values
+    /// Removes every stated value of one relation of one subject.
+    pub fn clear(&mut self, subj: ObjId, rel: &str) {
+        for value in self.facts.values(subj, rel).cloned().collect::<Vec<_>>() {
+            self.unstate(subj, rel, &value);
+        }
     }
 
     // --- rules and constraints ---
 
     /// The rules that produce facts: all but those parents still disagree on.
     pub fn active_rules(&self) -> impl Iterator<Item = &Rc<Rule>> {
-        self.rules.iter().filter(|(name, _)| !self.disputes.contains_key(&Dispute::Rule((*name).clone()))).map(|(_, r)| r)
+        self.rules.values().filter(|r| !self.disputes.contains_key(&Dispute::Rule(r.name.clone())))
     }
 
     pub fn active_nevers(&self) -> impl Iterator<Item = &Rc<Never>> {
-        self.nevers.iter().filter(|(name, _)| !self.disputes.contains_key(&Dispute::Never((*name).clone()))).map(|(_, n)| n)
+        self.nevers.values().filter(|n| !self.disputes.contains_key(&Dispute::Never(n.name.clone())))
     }
 
-    /// Adds a rule, or replaces the one with its name. Restating settles a dispute.
-    pub fn set_rule(&mut self, rule: Rule) {
-        self.disputes.remove(&Dispute::Rule(rule.name.clone()));
-        self.rules.insert(rule.name.clone(), Rc::new(rule));
-        self.touch();
-    }
-
-    pub fn remove_rule(&mut self, name: &Sym) -> bool {
+    /// Adds a rule, replaces the one with its name or (with `None`) removes it; `false` if there
+    /// was none. Restating settles a dispute.
+    pub fn set_rule(&mut self, name: &Sym, rule: Option<Rule>) -> bool {
         self.disputes.remove(&Dispute::Rule(name.clone()));
         self.touch();
-        self.rules.remove(name).is_some()
+        match rule {
+            Some(rule) => self.rules.insert(name.clone(), Rc::new(rule)),
+            None => self.rules.remove(name),
+        }
+        .is_some()
     }
 
-    pub fn set_never(&mut self, never: Never) {
-        self.disputes.remove(&Dispute::Never(never.name.clone()));
-        self.nevers.insert(never.name.clone(), Rc::new(never));
-        self.touch();
-    }
-
-    pub fn remove_never(&mut self, name: &Sym) -> bool {
+    pub fn set_never(&mut self, name: &Sym, never: Option<Never>) -> bool {
         self.disputes.remove(&Dispute::Never(name.clone()));
         self.touch();
-        self.nevers.remove(name).is_some()
+        match never {
+            Some(never) => self.nevers.insert(name.clone(), Rc::new(never)),
+            None => self.nevers.remove(name),
+        }
+        .is_some()
     }
 
     // --- showing ---
@@ -498,11 +432,8 @@ impl World {
             Value::Obj(id) => match self.locate(*id) {
                 Some((world, object)) if world.find(&object.handle).len() > 1 => {
                     // Indexes can repeat after a merge; then the world that made it tells them apart.
-                    let twins = world
-                        .find(&object.handle)
-                        .iter()
-                        .filter(|o| world.objects[*o].kind == object.kind && world.objects[*o].index == object.index)
-                        .count();
+                    let twin = |o: &ObjId| world.objects[o].kind == object.kind && world.objects[o].index == object.index;
+                    let twins = world.find(&object.handle).into_iter().filter(twin).count();
                     let origin = if twins > 1 { format!(" from {}", object.made_in) } else { String::new() };
                     format!("{} ({} {}{origin})", object.handle, object.kind, object.index)
                 }
@@ -516,7 +447,7 @@ impl World {
     fn locate(&self, id: ObjId) -> Option<(&World, &Object)> {
         match self.objects.get(&id) {
             Some(object) => Some((self, object)),
-            None => self.held().find_map(|w| w.locate(id)),
+            None => self.worlds().find_map(|w| w.locate(id)),
         }
     }
 }

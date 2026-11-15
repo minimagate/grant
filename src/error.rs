@@ -12,38 +12,34 @@ pub type Res<T> = Result<T, String>;
 pub struct Error {
     pub world: String,
     pub file: Option<PathBuf>,
-    /// The line of the statement, or `None` for what is checked when the world ends.
-    pub line: Option<u32>,
-    pub source: Option<String>,
+    /// The statement's line and text, or `None` for what is checked when the world ends.
+    pub line: Option<(u32, String)>,
     pub messages: Vec<String>,
     /// The parent's error, when this one only reports that a parent has errors.
     pub cause: Option<Rc<Error>>,
 }
 
-/// Why a statement failed: a sentence, or a parent world's own error.
-pub(crate) enum Fail {
-    Message(String),
-    Parent(String, Rc<Error>),
-}
+/// Why a statement failed: a sentence, and a parent world's own error if that is the reason.
+pub(crate) struct Fail(pub String, pub Option<Rc<Error>>);
 
 impl From<String> for Fail {
     fn from(message: String) -> Fail {
-        Fail::Message(message)
+        Fail(message, None)
     }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let file = self.file.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy());
-        match (self.line, self.messages.as_slice()) {
-            (Some(line), [message]) => {
+        match (&self.line, self.messages.as_slice()) {
+            (Some((line, source)), [message]) => {
                 match &file {
                     Some(file) => write!(f, "error in {} ({file}, line {line})", self.world)?,
                     None => write!(f, "error in {} (line {line})", self.world)?,
                 }
                 write!(f, ": {message}")?;
-                for (i, text) in self.source.iter().flat_map(|s| s.lines()).enumerate() {
-                    write!(f, "\n{:>5} | {text}", line as usize + i)?;
+                for (i, text) in source.lines().enumerate() {
+                    write!(f, "\n{:>5} | {text}", *line as usize + i)?;
                 }
             }
             (_, messages) => {

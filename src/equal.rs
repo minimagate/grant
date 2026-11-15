@@ -6,9 +6,8 @@ use crate::value::{ObjId, Sym, Value};
 use crate::world::World;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
 
 thread_local! {
     /// Answers already worked out, by the two worlds' ids. Only finished worlds are compared.
@@ -76,7 +75,7 @@ impl<'a> Graph<'a> {
 
     /// Recolours every object by its neighbours' colours, until that tells no more apart.
     fn refine(&mut self) {
-        let classes = |colour: &[u64]| colour.iter().collect::<std::collections::BTreeSet<_>>().len();
+        let classes = |colour: &[u64]| colour.iter().collect::<BTreeSet<_>>().len();
         loop {
             let next: Vec<u64> =
                 (0..self.ids.len()).map(|i| hash((self.colour[i], self.side(&self.out[i]), self.side(&self.into[i])))).collect();
@@ -89,32 +88,20 @@ impl<'a> Graph<'a> {
     }
 }
 
-/// Compares two named sets of rules or constraints with their objects set aside, and collects
-/// which object of `a` must match which of `b`.
-fn same_vocabulary<T, S: PartialEq>(
-    a: &BTreeMap<Sym, Rc<T>>,
-    b: &BTreeMap<Sym, Rc<T>>,
-    abstracted: impl Fn(&T) -> (S, Vec<ObjId>),
-    forced: &mut Vec<(ObjId, ObjId)>,
-) -> bool {
-    a.len() == b.len()
-        && a.iter().zip(b).all(|((name_a, rule_a), (name_b, rule_b))| {
-            let ((shape_a, objects_a), (shape_b, objects_b)) = (abstracted(rule_a), abstracted(rule_b));
-            forced.extend(objects_a.into_iter().zip(objects_b));
-            name_a == name_b && shape_a == shape_b
-        })
-}
-
 fn compare(a: &World, b: &World) -> bool {
-    let mut forced = Vec::new();
     if a.kinds != b.kinds
         || a.objects.len() != b.objects.len()
         || a.facts.len() != b.facts.len()
-        || !same_vocabulary(&a.rules, &b.rules, |r| r.abstracted(), &mut forced)
-        || !same_vocabulary(&a.nevers, &b.nevers, |n| n.abstracted(), &mut forced)
+        || !a.rules.values().map(|r| (&r.name, r.shape())).eq(b.rules.values().map(|r| (&r.name, r.shape())))
+        || !a.nevers.values().map(|n| (&n.name, n.shape())).eq(b.nevers.values().map(|n| (&n.name, n.shape())))
     {
         return false;
     }
+    // The objects the rules and constraints name, which must match each other in turn.
+    let named = |w: &World| -> Vec<ObjId> {
+        w.rules.values().flat_map(|r| &r.objects).chain(w.nevers.values().flat_map(|n| &n.objects)).copied().collect()
+    };
+    let forced: Vec<(ObjId, ObjId)> = named(a).into_iter().zip(named(b)).collect();
     // Worlds that share an ancestor are usually the same objects with the same facts.
     if a.objects.keys().eq(b.objects.keys()) && a.facts == b.facts && forced.iter().all(|(x, y)| x == y) {
         return true;
@@ -174,11 +161,11 @@ impl Matching<'_, '_> {
         if self.a.colour[i] != self.b.colour[j] {
             return false;
         }
-        let held = |g: &Graph, k: usize| g.world.objects[&g.ids[k]].held.clone();
+        let held = |g: &'_ Graph, k: usize| g.world.objects[&g.ids[k]].held.clone();
         match (held(self.a, i), held(self.b, j)) {
-            (Some(x), Some(y)) if !same_shape(&x, &y) => return false,
-            (Some(_), None) | (None, Some(_)) => return false,
-            _ => {}
+            (Some(x), Some(y)) if same_shape(&x, &y) => {}
+            (None, None) => {}
+            _ => return false,
         }
         // Every fact between `i` and an object already matched must be there between their matches.
         let matched = |k: usize| if k == i { Some(j) } else { self.to[k] };

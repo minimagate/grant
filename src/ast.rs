@@ -4,68 +4,8 @@ use crate::num::Rat;
 use crate::value::Sym;
 use std::fmt;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum BinOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    IntDiv,
-    Mod,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum CmpOp {
-    Eq,
-    Ne,
-    Lt,
-    Gt,
-    Le,
-    Ge,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum AggOp {
-    Sum,
-    Min,
-    Max,
-}
-
-impl fmt::Display for BinOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self {
-            BinOp::Add => "+",
-            BinOp::Sub => "-",
-            BinOp::Mul => "*",
-            BinOp::Div => "/",
-            BinOp::IntDiv => "div",
-            BinOp::Mod => "mod",
-        })
-    }
-}
-
-impl fmt::Display for CmpOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self {
-            CmpOp::Eq => "=",
-            CmpOp::Ne => "!=",
-            CmpOp::Lt => "<",
-            CmpOp::Gt => ">",
-            CmpOp::Le => "<=",
-            CmpOp::Ge => ">=",
-        })
-    }
-}
-
-impl fmt::Display for AggOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self {
-            AggOp::Sum => "sum",
-            AggOp::Min => "min",
-            AggOp::Max => "max",
-        })
-    }
-}
+/// An operator, as written: `+`, `div`, `<=`, `sum`.
+pub type Op = &'static str;
 
 #[derive(Clone, Debug)]
 pub enum Expr {
@@ -78,10 +18,11 @@ pub enum Expr {
     Index(u64),
     Dot(Box<Expr>, Sym),
     Neg(Box<Expr>),
-    Bin(BinOp, Box<Expr>, Box<Expr>),
-    Count(Box<Expr>),
-    CountCond(Box<Cond>),
-    Agg(AggOp, Box<Expr>),
+    Bin(Op, Box<Expr>, Box<Expr>),
+    /// `count`, `sum`, `min` or `max` of a value.
+    Agg(Op, Box<Expr>),
+    /// `count ( condition )`: how many ways it holds.
+    Count(Box<Cond>),
     /// `in w: expr`
     In(Box<Expr>, Box<Expr>),
 }
@@ -122,23 +63,28 @@ pub enum Cond {
         as_kind: Box<Cond>,
         as_term: Box<Cond>,
     },
-    Cmp(CmpOp, Expr, Expr),
+    Cmp(Op, Expr, Expr),
     /// A bare value. Only a whole question may be one.
     Value(Expr),
 }
 
+/// What a bracket entry does with its values.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Change {
+    /// `r: a, b` — these and no others.
+    Set,
+    /// `r: + a`
+    Add,
+    /// `r: - a`
+    Remove,
+}
+
+/// One bracket entry. `r: + a, - b` is two.
 #[derive(Clone, Debug)]
 pub struct Assign {
     pub rel: Sym,
-    pub values: Values,
-}
-
-#[derive(Clone, Debug)]
-pub enum Values {
-    /// `r: a, b` — these and no others.
-    Set(Vec<Expr>),
-    /// `r: + a, - b` — `true` adds, `false` removes.
-    Change(Vec<(bool, Expr)>),
+    pub change: Change,
+    pub values: Vec<Expr>,
 }
 
 /// How many values a relation holds.
@@ -228,7 +174,7 @@ pub enum Stmt {
     Each {
         kind: Sym,
         var: Sym,
-        cond: Option<Cond>,
+        cond: Cond,
         action: EachAction,
     },
     Rule {

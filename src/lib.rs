@@ -35,7 +35,6 @@ pub mod show;
 mod value;
 mod world;
 
-pub use equal::same_shape;
 pub use error::Error;
 pub use exec::{Output, Session};
 pub use lexer::{LexError, Line, lex};

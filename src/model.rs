@@ -1,9 +1,9 @@
 //! What follows: D(F, R), and what must hold when the world ends.
 
-use crate::ast::{AggOp, How};
+use crate::ast::How;
 use crate::error::Res;
 use crate::eval::{Eval, View};
-use crate::logic::{CCond, CExpr, Rule};
+use crate::logic::{CCond, CExpr, Rule, expr_slots};
 use crate::value::{ObjId, Sym, Value, a};
 use crate::world::{Facts, World};
 use std::collections::{BTreeSet, HashMap};
@@ -33,14 +33,11 @@ enum Use {
     Gathered(&'static str),
 }
 
-struct Read {
-    rel: Sym,
-    /// The value, when the rule names it: `p is adult` reads only `is adult`.
-    value: Option<Value>,
-    how: Use,
-}
+/// A relation a rule reads, and its value when the rule names one: `p is adult` reads only
+/// `is adult`.
+type Read<'r> = (&'r Sym, Option<&'r CExpr>, Use);
 
-fn cond_reads(c: &CCond, how: Use, out: &mut Vec<Read>) {
+fn cond_reads<'r>(c: &'r CCond, how: Use, out: &mut Vec<Read<'r>>) {
     match c {
         CCond::And(cs) | CCond::Or(cs) => cs.iter().for_each(|c| cond_reads(c, how, out)),
         CCond::Not(scope) => cond_reads(&scope.cond, if how == Use::Holds { Use::Negated } else { how }, out),
@@ -48,117 +45,111 @@ fn cond_reads(c: &CCond, how: Use, out: &mut Vec<Read>) {
         CCond::In(world, _) => expr_reads(world, how, out),
         CCond::Any(_) => {}
         CCond::Pattern { subj, rel, val, .. } => {
-            let value = match val {
-                CExpr::Const(value) => Some(value.clone()),
-                _ => None,
-            };
-            out.push(Read { rel: rel.clone(), value, how });
+            out.push((rel, Some(val), how));
             expr_reads(subj, how, out);
             expr_reads(val, how, out);
         }
         CCond::Cmp { op, left, right, .. } => {
             // `!=` stops holding when an equal value appears, as `not` does.
-            let how = if *op == crate::ast::CmpOp::Ne && how == Use::Holds { Use::Negated } else { how };
+            let how = if *op == "!=" && how == Use::Holds { Use::Negated } else { how };
             expr_reads(left, how, out);
             expr_reads(right, how, out);
         }
     }
 }
 
-fn expr_reads(e: &CExpr, how: Use, out: &mut Vec<Read>) {
+fn expr_reads<'r>(e: &'r CExpr, how: Use, out: &mut Vec<Read<'r>>) {
     let gathered = |word| if how == Use::Holds { Use::Gathered(word) } else { how };
     match e {
-        CExpr::Const(_) | CExpr::Var(_) | CExpr::Handle(_) | CExpr::Index(_) => {}
+        CExpr::Const(_) | CExpr::Obj(_) | CExpr::Var(_) | CExpr::Handle(_) | CExpr::Index(_) => {}
         CExpr::The(the) => {
             for (rel, described) in &the.desc {
-                out.push(Read { rel: rel.clone(), value: None, how: gathered("picks from") });
+                out.push((rel, None, gathered("picks from")));
                 described.iter().for_each(|e| expr_reads(e, gathered("picks from"), out));
             }
         }
         CExpr::Dot(base, rel) => {
-            out.push(Read { rel: rel.clone(), value: None, how });
+            out.push((rel, None, how));
             expr_reads(base, how, out);
         }
-        CExpr::Neg(e) => expr_reads(e, how, out),
+        CExpr::Neg(e) | CExpr::In(e, _) => expr_reads(e, how, out),
         CExpr::Bin(_, l, r) => {
             expr_reads(l, how, out);
             expr_reads(r, how, out);
         }
-        CExpr::Count(e) => expr_reads(e, gathered("counts"), out),
-        CExpr::CountCond(scope) => cond_reads(&scope.cond, gathered("counts"), out),
         CExpr::Agg(op, e) => {
-            let word = match op {
-                AggOp::Sum => "sums",
-                AggOp::Min => "takes the min of",
-                AggOp::Max => "takes the max of",
+            let word = match *op {
+                "count" => "counts",
+                "sum" => "sums",
+                "min" => "takes the min of",
+                _ => "takes the max of",
             };
             expr_reads(e, gathered(word), out);
         }
-        CExpr::In(world, _) => expr_reads(world, how, out),
+        CExpr::Count(scope) => cond_reads(&scope.cond, gathered("counts"), out),
     }
 }
 
 /// For each rule, the rules whose facts it reads, and how.
 fn dependencies(rules: &[&Rule]) -> Vec<Vec<(usize, Use)>> {
-    let heads: Vec<Option<&Value>> = rules.iter().map(|r| if let CExpr::Const(v) = &r.val { Some(v) } else { None }).collect();
-    rules
-        .iter()
-        .map(|rule| {
-            let mut reads = Vec::new();
-            cond_reads(&rule.cond, Use::Holds, &mut reads);
-            expr_reads(&rule.val, Use::Holds, &mut reads);
-            let mut edges = Vec::new();
-            for read in &reads {
-                for (j, other) in rules.iter().enumerate() {
-                    let overlaps = other.rel == read.rel && (read.value.is_none() || heads[j].is_none() || read.value.as_ref() == heads[j]);
-                    if overlaps && !edges.contains(&(j, read.how)) {
-                        edges.push((j, read.how));
-                    }
+    // The value a rule names outright, if this is one.
+    let named = |rule: &Rule, e: &CExpr| match e {
+        CExpr::Const(value) => Some(value.clone()),
+        CExpr::Obj(i) => Some(Value::Obj(rule.objects[*i])),
+        _ => None,
+    };
+    let heads: Vec<Option<Value>> = rules.iter().map(|r| named(r, &r.val)).collect();
+    let edges = |rule: &&Rule| {
+        let mut reads = Vec::new();
+        cond_reads(&rule.cond, Use::Holds, &mut reads);
+        expr_reads(&rule.val, Use::Holds, &mut reads);
+        let mut edges = Vec::new();
+        for (rel, value, how) in reads {
+            let value = value.and_then(|e| named(rule, e));
+            for (j, other) in rules.iter().enumerate() {
+                let overlaps = other.rel == *rel && (value.is_none() || heads[j].is_none() || value == heads[j]);
+                if overlaps && !edges.contains(&(j, how)) {
+                    edges.push((j, how));
                 }
             }
-            edges
-        })
-        .collect()
+        }
+        edges
+    };
+    rules.iter().map(edges).collect()
 }
 
 /// Groups of rules that depend on each other, each group after the groups it reads from.
 fn components(edges: &[Vec<(usize, Use)>]) -> Vec<Vec<usize>> {
     struct Walk<'a> {
         edges: &'a [Vec<(usize, Use)>],
+        /// When each rule was first reached, and the earliest rule on the stack it leads back to.
         index: Vec<Option<usize>>,
         low: Vec<usize>,
         stack: Vec<usize>,
-        on_stack: Vec<bool>,
         out: Vec<Vec<usize>>,
-        next: usize,
     }
     fn visit(w: &mut Walk, v: usize) {
-        w.index[v] = Some(w.next);
-        w.low[v] = w.next;
-        w.next += 1;
+        let reached = w.index.iter().flatten().count();
+        (w.index[v], w.low[v]) = (Some(reached), reached);
         w.stack.push(v);
-        w.on_stack[v] = true;
-        let edges = w.edges;
-        for &(to, _) in &edges[v] {
+        for &(to, _) in &w.edges[v] {
             match w.index[to] {
                 None => {
                     visit(w, to);
                     w.low[v] = w.low[v].min(w.low[to]);
                 }
-                Some(index) if w.on_stack[to] => w.low[v] = w.low[v].min(index),
+                Some(index) if w.stack.contains(&to) => w.low[v] = w.low[v].min(index),
                 Some(_) => {}
             }
         }
-        if w.index[v] == Some(w.low[v]) {
+        if w.low[v] == reached {
             let at = w.stack.iter().rposition(|&x| x == v).unwrap();
             let group = w.stack.split_off(at);
-            group.iter().for_each(|&x| w.on_stack[x] = false);
             w.out.push(group);
         }
     }
     let n = edges.len();
-    let mut walk =
-        Walk { edges, index: vec![None; n], low: vec![0; n], stack: Vec::new(), on_stack: vec![false; n], out: Vec::new(), next: 0 };
+    let mut walk = Walk { edges, index: vec![None; n], low: vec![0; n], stack: Vec::new(), out: Vec::new() };
     for v in 0..n {
         if walk.index[v].is_none() {
             visit(&mut walk, v);
@@ -208,7 +199,7 @@ pub fn derive(world: &World) -> Res<Model> {
             continue;
         }
         let recursive = group.len() > 1 || edges[group[0]].iter().any(|(j, _)| *j == group[0]);
-        let computes = group.iter().any(|i| !matches!(rules[*i].val, CExpr::Var(_) | CExpr::Const(_)));
+        let computes = group.iter().any(|i| !matches!(rules[*i].val, CExpr::Var(_) | CExpr::Const(_) | CExpr::Obj(_)));
         for round in 1.. {
             let mut produced = Vec::new();
             for &i in &group {
@@ -234,12 +225,12 @@ pub fn derive(world: &World) -> Res<Model> {
 
 /// Every fact one rule produces from the facts so far.
 fn fire<'r>(world: &World, facts: &Facts, rule: &'r Rule, out: &mut Vec<(&'r Rule, ObjId, Value)>) -> Res<()> {
-    let eval = Eval { vars: &rule.vars };
+    let eval = Eval { vars: &rule.vars, objects: &rule.objects };
     let view = View { world, facts };
-    let head = rule.head_slots();
     let kind = &rule.vars[rule.subj].kind;
-    let mut env = vec![None; rule.vars.len()];
-    eval.solve(&rule.cond, &mut env, &view, &mut |env| {
+    let mut head = vec![rule.subj];
+    expr_slots(&rule.val, &mut head);
+    eval.solve(&rule.cond, &mut vec![None; rule.vars.len()], &view, &mut |env| {
         eval.ground(&head, env, &view, &mut |env| {
             // Only things of this world have facts here.
             let Some(Value::Obj(subj)) = env[rule.subj].clone() else { return Ok(true) };
@@ -286,8 +277,7 @@ pub fn check(world: &World) -> Res<Vec<String>> {
         }
     }
     for (id, object) in &world.objects {
-        let Some(kind) = world.kinds.get(&object.kind) else { continue };
-        for (rel, field) in &kind.fields {
+        for (rel, field) in world.kinds.get(&object.kind).into_iter().flatten() {
             let n = model.facts.values(*id, rel).count();
             let broken = match field.how {
                 How::One => n != 1,
@@ -303,10 +293,9 @@ pub fn check(world: &World) -> Res<Vec<String>> {
     }
     let view = View { world, facts: &model.facts };
     for never in world.active_nevers() {
-        let eval = Eval { vars: &never.vars };
+        let eval = Eval { vars: &never.vars, objects: &never.objects };
         let mut breaking = BTreeSet::new();
-        let mut env = vec![None; never.vars.len()];
-        let found = eval.solve(&never.cond, &mut env, &view, &mut |env| {
+        let found = eval.solve(&never.cond, &mut vec![None; never.vars.len()], &view, &mut |env| {
             eval.ground(&[never.subj], env, &view, &mut |env| {
                 breaking.extend(env[never.subj].clone());
                 Ok(true)

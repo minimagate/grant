@@ -8,22 +8,13 @@ use crate::error::Res;
 use crate::lexer::Tok;
 use crate::value::Sym;
 
-const KEYWORDS: [&str; 19] = [
-    "from", "kind", "rule", "never", "if", "where", "and", "or", "not", "the", "each", "in", "count", "sum", "min", "max", "div", "mod",
-    "id",
-];
-
-pub fn is_keyword(word: &str) -> bool {
-    KEYWORDS.contains(&word)
-}
-
 pub fn parse(tokens: &[Tok]) -> Res<Stmt> {
     let mut parser = Parser { t: tokens, i: 0, depth: 0 };
     let stmt = parser.statement()?;
-    match parser.peek() {
-        None => Ok(stmt),
-        Some(_) => Err(format!("{} doesn't belong here", parser.found())),
+    if parser.peek().is_some() {
+        return Err(format!("{} doesn't belong here", parser.found()));
     }
+    Ok(stmt)
 }
 
 struct Parser<'a> {
@@ -50,30 +41,36 @@ impl Parser<'_> {
         self.peek().map_or("the end of the line".into(), |t| format!("`{t}`"))
     }
 
-    fn kw(&self, word: &str) -> bool {
-        matches!(self.peek(), Some(Tok::Ident(w)) if &**w == word)
+    /// Whether the next token is this keyword or mark.
+    fn is(&self, sign: &str) -> bool {
+        matches!(self.peek(), Some(Tok::Sign(s)) if *s == sign)
     }
 
-    fn eat_kw(&mut self, word: &str) -> bool {
-        let found = self.kw(word);
+    fn eat(&mut self, sign: &str) -> bool {
+        let found = self.is(sign);
         self.i += found as usize;
         found
     }
 
-    fn eat(&mut self, token: &Tok) -> bool {
-        let found = self.peek() == Some(token);
-        self.i += found as usize;
-        found
+    /// Eats whichever of these operators is next, and says which.
+    fn any(&mut self, ops: &[Op]) -> Option<Op> {
+        ops.iter().copied().find(|op| self.eat(op))
     }
 
-    fn expect(&mut self, token: Tok) -> Res<()> {
-        if self.eat(&token) { Ok(()) } else { Err(format!("expected `{token}` but found {}", self.found())) }
+    /// Eats a `-`, tight or not.
+    fn minus(&mut self) -> bool {
+        let tight = self.peek() == Some(&Tok::TightMinus);
+        self.i += tight as usize;
+        tight || self.eat("-")
     }
 
-    /// The name `n` tokens ahead, if there is one and it isn't a keyword.
+    fn expect(&mut self, sign: &str) -> Res<()> {
+        if self.eat(sign) { Ok(()) } else { Err(format!("expected `{sign}` but found {}", self.found())) }
+    }
+
     fn name_at(&self, n: usize) -> Option<&Sym> {
         match self.at(n) {
-            Some(Tok::Ident(w)) if !is_keyword(w) => Some(w),
+            Some(Tok::Name(name)) => Some(name),
             _ => None,
         }
     }
@@ -85,46 +82,41 @@ impl Parser<'_> {
     }
 
     fn statement(&mut self) -> Res<Stmt> {
-        match () {
-            _ if self.eat(&Tok::Question) => Ok(Stmt::Ask(self.condition()?)),
-            _ if self.eat(&Tok::Plus) => self.change(),
-            _ if self.eat(&Tok::Minus) || self.eat(&Tok::TightMinus) => self.removal(),
-            _ if self.eat_kw("from") => {
-                let mut parents = vec![self.world_path()?];
-                while self.eat(&Tok::Comma) {
-                    parents.push(self.world_path()?);
-                }
-                Ok(Stmt::From(parents))
+        if self.eat("?") {
+            Ok(Stmt::Ask(self.condition()?))
+        } else if self.eat("+") {
+            self.change()
+        } else if self.minus() {
+            self.removal()
+        } else if self.eat("from") {
+            let mut parents = vec![self.world_path()?];
+            while self.eat(",") {
+                parents.push(self.world_path()?);
             }
-            _ if self.eat_kw("kind") => self.kind(),
-            _ if self.eat_kw("rule") => {
-                let name = self.name("the rule's name")?;
-                self.expect(Tok::Colon)?;
-                let head =
-                    Head { kind: self.name("a kind")?, var: self.name("a variable")?, rel: self.name("a relation")?, val: self.pterm()? };
-                let cond = if self.eat_kw("if") { self.condition()? } else { Cond::And(Vec::new()) };
-                Ok(Stmt::Rule { name, head, cond })
-            }
-            _ if self.eat_kw("never") => {
-                let name = self.name("the constraint's name")?;
-                self.expect(Tok::Colon)?;
-                let kind = self.name("a kind")?;
-                let var = self.name("a variable")?;
-                if !self.eat_kw("where") {
-                    return Err(format!("expected `where` but found {}", self.found()));
-                }
-                Ok(Stmt::Never { name, kind, var, cond: self.condition()? })
-            }
-            _ if self.eat_kw("each") => self.each(false),
-            _ if self.kw("in") => match self.name_at(1) {
-                Some(world) => {
-                    let world = world.clone();
-                    self.i = self.t.len();
-                    Ok(Stmt::InChange(world))
-                }
-                None => Err("`in` looks inside a world; it starts a question, not a line".into()),
-            },
-            _ => self.change(),
+            Ok(Stmt::From(parents))
+        } else if self.eat("kind") {
+            self.kind()
+        } else if self.eat("rule") {
+            let name = self.name("the rule's name")?;
+            self.expect(":")?;
+            let head =
+                Head { kind: self.name("a kind")?, var: self.name("a variable")?, rel: self.name("a relation")?, val: self.pterm()? };
+            let cond = if self.eat("if") { self.condition()? } else { Cond::And(Vec::new()) };
+            Ok(Stmt::Rule { name, head, cond })
+        } else if self.eat("never") {
+            let name = self.name("the constraint's name")?;
+            self.expect(":")?;
+            let (kind, var) = (self.name("a kind")?, self.name("a variable")?);
+            self.expect("where")?;
+            Ok(Stmt::Never { name, kind, var, cond: self.condition()? })
+        } else if self.eat("each") {
+            self.each(false)
+        } else if self.is("in") {
+            let world = self.name_at(1).cloned().ok_or("`in` looks inside a world; it starts a question, not a line")?;
+            self.i = self.t.len();
+            Ok(Stmt::InChange(world))
+        } else {
+            self.change()
         }
     }
 
@@ -132,15 +124,15 @@ impl Parser<'_> {
     fn world_path(&mut self) -> Res<String> {
         let mut path = String::new();
         loop {
-            if self.peek() == Some(&Tok::Dot) && self.at(1) == Some(&Tok::Dot) {
+            if self.is(".") && self.at(1) == Some(&Tok::Sign(".")) {
                 self.i += 2;
                 path.push_str("..");
-            } else if self.eat_kw("id") {
+            } else if self.eat("id") {
                 path.push_str("id");
             } else {
                 path.push_str(&self.name("a world's name")?);
             }
-            if !self.eat(&Tok::Slash) {
+            if !self.eat("/") {
                 return Ok(path);
             }
             path.push('/');
@@ -150,14 +142,15 @@ impl Parser<'_> {
     fn kind(&mut self) -> Res<Stmt> {
         let name = self.name("the kind's name")?;
         let mut edits = Vec::new();
-        if self.peek() == Some(&Tok::LBracket) {
-            edits = self.list(|p| {
-                if p.eat(&Tok::Minus) {
-                    return Ok(ShapeEdit::Remove(p.name("a relation")?));
+        if self.is("[") {
+            self.list(|p| {
+                if p.eat("-") {
+                    edits.push(ShapeEdit::Remove(p.name("a relation")?));
+                    return Ok(());
                 }
-                let set = p.eat(&Tok::Plus);
+                let set = p.eat("+");
                 let rel = p.name("a relation")?;
-                p.expect(Tok::Colon)?;
+                p.expect(":")?;
                 let word = match p.name_at(0).map(|w| &**w) {
                     Some("one") => How::One,
                     Some("maybe") => How::Maybe,
@@ -167,62 +160,62 @@ impl Parser<'_> {
                 // `knows: many` alone would name a kind called many.
                 let worded = p.name_at(1).is_some() && (word != How::Many || p.name_at(0).is_some_and(|w| &**w == "many"));
                 p.i += worded as usize;
-                let field = Field {
-                    how: if worded { word } else { How::Many },
-                    kind: if p.eat_kw("id") { "id".into() } else { p.name("a kind")? },
-                };
-                Ok(if set { ShapeEdit::Set(rel, field) } else { ShapeEdit::Declare(rel, field) })
+                let field =
+                    Field { how: if worded { word } else { How::Many }, kind: if p.eat("id") { "id".into() } else { p.name("a kind")? } };
+                edits.push(if set { ShapeEdit::Set(rel, field) } else { ShapeEdit::Declare(rel, field) });
+                Ok(())
             })?;
         }
         Ok(Stmt::Kind { name, edits })
     }
 
-    /// `[ item | item … ]`, where a new line separates too.
-    fn list<T>(&mut self, mut item: impl FnMut(&mut Self) -> Res<T>) -> Res<Vec<T>> {
-        self.expect(Tok::LBracket)?;
-        let mut items = Vec::new();
+    /// `[ entry | entry … ]`, where a new line separates too.
+    fn list(&mut self, mut entry: impl FnMut(&mut Self) -> Res<()>) -> Res<()> {
+        self.expect("[")?;
         loop {
-            while self.eat(&Tok::Sep) {}
-            if self.eat(&Tok::RBracket) {
-                return Ok(items);
+            while self.eat("|") {}
+            if self.eat("]") {
+                return Ok(());
             }
-            items.push(item(self)?);
-            if !matches!(self.peek(), Some(Tok::Sep | Tok::RBracket)) {
+            entry(self)?;
+            if !self.is("|") && !self.is("]") {
                 return Err(format!("expected `|` or `]` but found {}", self.found()));
             }
         }
     }
 
+    /// `[ r: a, b | s: + c, - d ]`, or nothing where the brackets are left out.
     fn values(&mut self) -> Res<Vec<Assign>> {
+        let mut assigns = Vec::new();
+        if self.peek().is_none() {
+            return Ok(assigns);
+        }
         self.list(|p| {
             let rel = p.name("a relation")?;
-            p.expect(Tok::Colon)?;
-            let signed = |p: &Self| matches!(p.peek(), Some(Tok::Plus | Tok::Minus));
-            let values = if signed(p) {
-                let mut changes = Vec::new();
-                loop {
-                    if !signed(p) {
-                        return Err(format!("`{rel}` mixes values with `+` and `-`; sign every value or none"));
-                    }
-                    let adds = p.eat(&Tok::Plus);
-                    p.i += !adds as usize;
-                    changes.push((adds, p.expr()?));
-                    if !p.eat(&Tok::Comma) {
-                        break Values::Change(changes);
-                    }
+            p.expect(":")?;
+            let signed = p.is("+") || p.is("-");
+            let mut set = Vec::new();
+            loop {
+                if signed != (p.is("+") || p.is("-")) {
+                    return Err(format!("`{rel}` mixes values with `+` and `-`; sign every value or none"));
                 }
-            } else {
-                let mut set = vec![p.expr()?];
-                while p.eat(&Tok::Comma) {
-                    if signed(p) {
-                        return Err(format!("`{rel}` mixes values with `+` and `-`; sign every value or none"));
-                    }
+                if signed {
+                    let change = if p.eat("+") { Change::Add } else { Change::Remove };
+                    p.i += (change == Change::Remove) as usize;
+                    assigns.push(Assign { rel: rel.clone(), change, values: vec![p.expr()?] });
+                } else {
                     set.push(p.expr()?);
                 }
-                Values::Set(set)
-            };
-            Ok(Assign { rel, values })
-        })
+                if !p.eat(",") {
+                    break;
+                }
+            }
+            if !signed {
+                assigns.push(Assign { rel, change: Change::Set, values: set });
+            }
+            Ok(())
+        })?;
+        Ok(assigns)
     }
 
     /// A line that states: an object, a fact, or values set in brackets.
@@ -231,54 +224,42 @@ impl Parser<'_> {
         if self.name_at(0).is_some_and(|n| &**n == "world") {
             self.i += 1;
             if let Ok(path) = self.world_path()
-                && matches!(self.peek(), None | Some(Tok::LBracket))
+                && (self.peek().is_none() || self.is("["))
             {
                 let handle = path.rsplit('/').next().unwrap_or(&path).into();
-                let values = if self.peek().is_some() { self.values()? } else { Vec::new() };
-                return Ok(Stmt::Create { kind: "world".into(), handle, path: Some(path), values });
+                return Ok(Stmt::Create { kind: "world".into(), handle, path: Some(path), values: self.values()? });
             }
             self.i = start;
         }
-        let subj = if self.kw("the") {
-            Some(Expr::The(Box::new(self.the()?)))
-        } else {
-            self.name_at(0).cloned().map(|n| {
-                self.i += 1;
-                Expr::Name(n)
-            })
-        };
-        if let Some(subj) = subj {
-            if self.peek() == Some(&Tok::LBracket) {
+        if self.is("the") || self.name_at(0).is_some() {
+            let subj = self.reference()?;
+            if self.is("[") {
                 return Ok(Stmt::Set { subj, values: self.values()? });
             }
             if let Some(rel) = self.name_at(0).cloned() {
                 self.i += 1;
-                return match (&subj, self.peek()) {
-                    (Expr::Name(kind), None) => Ok(Stmt::Create { kind: kind.clone(), handle: rel, path: None, values: Vec::new() }),
-                    (Expr::Name(kind), Some(Tok::LBracket)) => {
-                        Ok(Stmt::Create { kind: kind.clone(), handle: rel, path: None, values: self.values()? })
+                return Ok(match subj {
+                    Expr::Name(kind) if self.peek().is_none() || self.is("[") => {
+                        Stmt::Create { kind, handle: rel, path: None, values: self.values()? }
                     }
-                    _ => Ok(Stmt::Fact { subj, rel, value: self.expr()? }),
-                };
+                    subj => Stmt::Fact { subj, rel, value: self.expr()? },
+                });
             }
         }
         // Not a statement. If it reads as a value, say what is wrong with that.
         self.i = start;
         self.expr()?;
-        match self.peek() {
-            None => Err("this value isn't used".into()),
-            Some(_) => Err(format!("{} doesn't belong here", self.found())),
-        }
+        Err(if self.peek().is_none() { "this value isn't used".into() } else { format!("{} doesn't belong here", self.found()) })
     }
 
     fn removal(&mut self) -> Res<Stmt> {
-        if self.eat_kw("kind") {
+        if self.eat("kind") {
             Ok(Stmt::RemoveKind(self.name("a kind")?))
-        } else if self.eat_kw("rule") {
+        } else if self.eat("rule") {
             Ok(Stmt::RemoveRule(self.name("a rule's name")?))
-        } else if self.eat_kw("never") {
+        } else if self.eat("never") {
             Ok(Stmt::RemoveNever(self.name("a constraint's name")?))
-        } else if self.eat_kw("each") {
+        } else if self.eat("each") {
             self.each(true)
         } else {
             let subj = self.reference()?;
@@ -292,8 +273,8 @@ impl Parser<'_> {
     fn each(&mut self, removes: bool) -> Res<Stmt> {
         let kind = self.name("a kind")?;
         let var = self.name("a variable")?;
-        let cond = if self.eat_kw("where") { Some(self.condition()?) } else { None };
-        let action = if self.peek() == Some(&Tok::LBracket) {
+        let cond = if self.eat("where") { self.condition()? } else { Cond::And(Vec::new()) };
+        let action = if self.is("[") {
             if removes {
                 return Err("`- each` removes things or relations; to change values write `each … [ r: - v ]`".into());
             }
@@ -314,32 +295,31 @@ impl Parser<'_> {
         Ok(Stmt::Each { kind, var, cond, action })
     }
 
+    /// A handle, or `the` with a description.
     fn reference(&mut self) -> Res<Expr> {
-        if self.kw("the") { Ok(Expr::The(Box::new(self.the()?))) } else { Ok(Expr::Name(self.name("a name")?)) }
-    }
-
-    fn the(&mut self) -> Res<The> {
-        self.i += 1;
+        if !self.eat("the") {
+            return Ok(Expr::Name(self.name("a name")?));
+        }
         let first = self.name("a handle")?;
         let (kind, handle) = match self.name_at(0) {
-            Some(second) if self.at(1) == Some(&Tok::LBracket) => {
+            Some(second) if self.at(1) == Some(&Tok::Sign("[")) => {
                 let second = second.clone();
                 self.i += 1;
                 (Some(first), second)
             }
             _ => (None, first),
         };
-        if self.peek() != Some(&Tok::LBracket) {
+        if !self.is("[") {
             return Err(format!("after `the {handle}`, describe which one in brackets"));
         }
         let mut desc = Vec::new();
         for assign in self.values()? {
-            match assign.values {
-                Values::Set(values) => desc.push((assign.rel, values)),
-                Values::Change(_) => return Err("after `the`, brackets describe; they can't use `+` or `-`".into()),
+            if assign.change != Change::Set {
+                return Err("after `the`, brackets describe; they can't use `+` or `-`".into());
             }
+            desc.push((assign.rel, assign.values));
         }
-        Ok(The { kind, handle, desc })
+        Ok(Expr::The(Box::new(The { kind, handle, desc })))
     }
 
     /// Runs a parser one level deeper.
@@ -353,34 +333,27 @@ impl Parser<'_> {
         result
     }
 
+    /// Parts joined by `and` or `or`.
+    fn joined(&mut self, word: &str, part: fn(&mut Self) -> Res<Cond>, join: fn(Vec<Cond>) -> Cond) -> Res<Cond> {
+        let mut parts = vec![part(self)?];
+        while self.eat(word) {
+            parts.push(part(self)?);
+        }
+        Ok(if parts.len() == 1 { parts.remove(0) } else { join(parts) })
+    }
+
     fn condition(&mut self) -> Res<Cond> {
-        self.nested(Self::disjunction)
-    }
-
-    fn disjunction(&mut self) -> Res<Cond> {
-        let mut any = vec![self.conjunction()?];
-        while self.eat_kw("or") {
-            any.push(self.conjunction()?);
-        }
-        Ok(if any.len() == 1 { any.remove(0) } else { Cond::Or(any) })
-    }
-
-    fn conjunction(&mut self) -> Res<Cond> {
-        let mut all = vec![self.negation()?];
-        while self.eat_kw("and") {
-            all.push(self.negation()?);
-        }
-        Ok(if all.len() == 1 { all.remove(0) } else { Cond::And(all) })
+        self.nested(|p| p.joined("or", |p| p.joined("and", Self::negation, Cond::And), Cond::Or))
     }
 
     fn negation(&mut self) -> Res<Cond> {
-        if self.eat_kw("not") { Ok(Cond::Not(Box::new(self.nested(Self::negation)?))) } else { self.item() }
+        if self.eat("not") { Ok(Cond::Not(Box::new(self.nested(Self::negation)?))) } else { self.item() }
     }
 
     fn item(&mut self) -> Res<Cond> {
-        if self.eat_kw("in") {
+        if self.eat("in") {
             let world = self.reference()?;
-            self.expect(Tok::Colon)?;
+            self.expect(":")?;
             return Ok(match self.condition()? {
                 Cond::Value(value) => Cond::Value(Expr::In(Box::new(world), Box::new(value))),
                 cond => Cond::In(world, Box::new(cond)),
@@ -394,25 +367,15 @@ impl Parser<'_> {
         let lead = match self.expr() {
             Ok(lead) => lead,
             // Not a value in parentheses, so a condition in parentheses.
-            Err(e) if e != TOO_DEEP && self.t.get(start) == Some(&Tok::LParen) => {
+            Err(e) if e != TOO_DEEP && self.t.get(start) == Some(&Tok::Sign("(")) => {
                 self.i = start + 1;
                 let cond = self.condition()?;
-                self.expect(Tok::RParen)?;
+                self.expect(")")?;
                 return Ok(cond);
             }
             Err(e) => return Err(e),
         };
-        let op = match self.peek() {
-            Some(Tok::Eq) => Some(CmpOp::Eq),
-            Some(Tok::Ne) => Some(CmpOp::Ne),
-            Some(Tok::Lt) => Some(CmpOp::Lt),
-            Some(Tok::Gt) => Some(CmpOp::Gt),
-            Some(Tok::Le) => Some(CmpOp::Le),
-            Some(Tok::Ge) => Some(CmpOp::Ge),
-            _ => None,
-        };
-        if let Some(op) = op {
-            self.i += 1;
+        if let Some(op) = self.any(&["=", "!=", "<", ">", "<=", ">="]) {
             return Ok(Cond::Cmp(op, lead, self.expr()?));
         }
         if let Some(rel) = self.name_at(0).cloned() {
@@ -433,47 +396,37 @@ impl Parser<'_> {
         let after = self.at(n);
         // Does the last name carry on as a value, or does a new value start after it?
         let carries_on = match after {
-            Some(Tok::Dot | Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash) => true,
+            Some(Tok::Sign("." | "+" | "-" | "*" | "/" | "div" | "mod")) => true,
             Some(Tok::TightMinus) => n >= 4,
-            Some(Tok::Ident(w)) => matches!(&**w, "div" | "mod"),
             _ => false,
         };
-        let value_starts = match after {
-            Some(Tok::Num(_) | Tok::Text(_) | Tok::LParen | Tok::Minus | Tok::TightMinus) => true,
-            Some(Tok::Ident(w)) => matches!(&**w, "the" | "count" | "sum" | "min" | "max" | "in" | "id"),
-            _ => false,
-        };
+        let value_starts = matches!(
+            after,
+            Some(
+                Tok::Num(_) | Tok::Text(_) | Tok::TightMinus | Tok::Sign("(" | "-" | "the" | "count" | "sum" | "min" | "max" | "in" | "id")
+            )
+        );
         // Reads `skip` names, then the value that follows them.
         let pattern = |p: &mut Self, subj: PTerm, rel: usize, skip: usize| -> Res<Cond> {
             let rel = name(p, rel);
             p.i += skip;
             Ok(Cond::Pattern { subj, rel, val: PTerm::Expr(p.expr()?) })
         };
-        match n {
-            2 if value_starts => pattern(self, term(self, 0), 1, 2),
-            2 => {
-                let any = Cond::Any(name(self, 0), name(self, 1));
-                self.i += 2;
-                Ok(any)
-            }
-            3 if carries_on => pattern(self, term(self, 0), 1, 2),
-            3 if value_starts => pattern(self, intro(self, 0), 2, 3),
-            3 => pattern(self, term(self, 0), 1, 2),
-            4 if carries_on => pattern(self, intro(self, 0), 2, 3),
+        let whole = match n {
+            2 if !value_starts => Cond::Any(name(self, 0), name(self, 1)),
+            3 if value_starts && !carries_on => return pattern(self, intro(self, 0), 2, 3),
+            2 | 3 => return pattern(self, term(self, 0), 1, 2),
+            4 if carries_on => return pattern(self, intro(self, 0), 2, 3),
             4 => {
                 let as_kind = Cond::Pattern { subj: intro(self, 0), rel: name(self, 2), val: term(self, 3) };
                 let as_term = Cond::Pattern { subj: term(self, 0), rel: name(self, 1), val: intro(self, 2) };
-                let either = Cond::Either { name: name(self, 0), as_kind: Box::new(as_kind), as_term: Box::new(as_term) };
-                self.i += 4;
-                Ok(either)
+                Cond::Either { name: name(self, 0), as_kind: Box::new(as_kind), as_term: Box::new(as_term) }
             }
-            5 => {
-                let both = Cond::Pattern { subj: intro(self, 0), rel: name(self, 2), val: intro(self, 3) };
-                self.i += 5;
-                Ok(both)
-            }
-            _ => Err(format!("{n} names in a row from `{}`; a fact has a subject, a relation and a value", name(self, 0))),
-        }
+            5 => Cond::Pattern { subj: intro(self, 0), rel: name(self, 2), val: intro(self, 3) },
+            _ => return Err(format!("{n} names in a row from `{}`; a fact has a subject, a relation and a value", name(self, 0))),
+        };
+        self.i += n;
+        Ok(whole)
     }
 
     /// The value side of a fact pattern: `person p`, or a value.
@@ -495,37 +448,27 @@ impl Parser<'_> {
     fn sum(&mut self) -> Res<Expr> {
         let mut left = self.product()?;
         loop {
-            let op = match self.peek() {
-                Some(Tok::Plus) => BinOp::Add,
-                Some(Tok::Minus | Tok::TightMinus) => BinOp::Sub,
-                _ => return Ok(left),
+            let op = if self.eat("+") {
+                "+"
+            } else if self.minus() {
+                "-"
+            } else {
+                return Ok(left);
             };
-            self.i += 1;
             left = Expr::Bin(op, Box::new(left), Box::new(self.product()?));
         }
     }
 
     fn product(&mut self) -> Res<Expr> {
         let mut left = self.unary()?;
-        loop {
-            let op = match self.peek() {
-                Some(Tok::Star) => BinOp::Mul,
-                Some(Tok::Slash) => BinOp::Div,
-                Some(Tok::Ident(w)) if &**w == "div" => BinOp::IntDiv,
-                Some(Tok::Ident(w)) if &**w == "mod" => BinOp::Mod,
-                _ => return Ok(left),
-            };
-            self.i += 1;
+        while let Some(op) = self.any(&["*", "/", "div", "mod"]) {
             left = Expr::Bin(op, Box::new(left), Box::new(self.unary()?));
         }
+        Ok(left)
     }
 
     fn unary(&mut self) -> Res<Expr> {
-        if matches!(self.peek(), Some(Tok::Minus | Tok::TightMinus)) {
-            self.i += 1;
-            return Ok(Expr::Neg(Box::new(self.nested(Self::unary)?)));
-        }
-        self.dotted()
+        if self.minus() { Ok(Expr::Neg(Box::new(self.nested(Self::unary)?))) } else { self.dotted() }
     }
 
     fn dotted(&mut self) -> Res<Expr> {
@@ -535,82 +478,54 @@ impl Parser<'_> {
 
     /// The relations followed from a value: `.knows.age`.
     fn dots(&mut self, mut value: Expr) -> Res<Expr> {
-        while self.eat(&Tok::Dot) {
-            let rel = match self.peek() {
-                Some(Tok::Ident(w)) if &**w == "id" || !is_keyword(w) => w.clone(),
-                _ => return Err(format!("expected a relation after `.` but found {}", self.found())),
-            };
-            self.i += 1;
+        while self.eat(".") {
+            let rel = if self.eat("id") { "id".into() } else { self.name("a relation after `.`")? };
             value = Expr::Dot(Box::new(value), rel);
         }
         Ok(value)
     }
 
     fn primary(&mut self) -> Res<Expr> {
+        if self.is("the") {
+            return self.reference();
+        }
         let Some(token) = self.peek().cloned() else { return Err("expected a value but the line ends".into()) };
+        self.i += 1;
         match token {
-            Tok::Num(n) => {
-                self.i += 1;
-                Ok(Expr::Num(n))
-            }
-            Tok::Text(t) => {
-                self.i += 1;
-                Ok(Expr::Text(t))
-            }
-            Tok::LParen => {
-                self.i += 1;
+            Tok::Num(n) => Ok(Expr::Num(n)),
+            Tok::Text(t) => Ok(Expr::Text(t)),
+            Tok::Name(name) => Ok(Expr::Name(name)),
+            Tok::Sign("(") => {
                 let inner = self.expr()?;
-                self.expect(Tok::RParen)?;
+                self.expect(")")?;
                 Ok(inner)
             }
-            Tok::Ident(word) => match &*word {
-                "the" => Ok(Expr::The(Box::new(self.the()?))),
-                "count" => {
-                    self.i += 1;
-                    if !self.eat(&Tok::LParen) {
-                        return Ok(Expr::Count(Box::new(self.dotted()?)));
-                    }
-                    // In parentheses: a pattern whose matches are counted, or a value.
-                    let cond = self.condition()?;
-                    self.expect(Tok::RParen)?;
-                    Ok(match cond {
-                        Cond::Value(value) => Expr::Count(Box::new(self.dots(value)?)),
-                        cond => Expr::CountCond(Box::new(cond)),
-                    })
-                }
-                "sum" | "min" | "max" => {
-                    self.i += 1;
-                    let op = match &*word {
-                        "sum" => AggOp::Sum,
-                        "min" => AggOp::Min,
-                        _ => AggOp::Max,
-                    };
-                    Ok(Expr::Agg(op, Box::new(self.dotted()?)))
-                }
-                "in" => {
-                    self.i += 1;
-                    let world = self.reference()?;
-                    self.expect(Tok::Colon)?;
-                    Ok(Expr::In(Box::new(world), Box::new(self.expr()?)))
-                }
-                "id" => {
-                    self.i += 1;
-                    self.expect(Tok::Dot)?;
-                    match self.peek().cloned() {
-                        Some(Tok::Num(n)) if n.as_index().is_some() => {
-                            self.i += 1;
-                            Ok(Expr::Index(n.as_index().unwrap()))
-                        }
-                        _ => Err(format!("after `id.` write an index like 1, not {}", self.found())),
-                    }
-                }
-                w if is_keyword(w) => Err(format!("expected a value but found `{w}`")),
-                _ => {
-                    self.i += 1;
-                    Ok(Expr::Name(word))
-                }
-            },
-            _ => Err(format!("expected a value but found {}", self.found())),
+            // In parentheses: a pattern whose matches are counted, or a value.
+            Tok::Sign("count") if self.eat("(") => {
+                let cond = self.condition()?;
+                self.expect(")")?;
+                Ok(match cond {
+                    Cond::Value(value) => Expr::Agg("count", Box::new(self.dots(value)?)),
+                    cond => Expr::Count(Box::new(cond)),
+                })
+            }
+            Tok::Sign(op @ ("count" | "sum" | "min" | "max")) => Ok(Expr::Agg(op, Box::new(self.dotted()?))),
+            Tok::Sign("in") => {
+                let world = self.reference()?;
+                self.expect(":")?;
+                Ok(Expr::In(Box::new(world), Box::new(self.expr()?)))
+            }
+            Tok::Sign("id") => {
+                self.expect(".")?;
+                let index = match self.peek() {
+                    Some(Tok::Num(n)) => n.as_index(),
+                    _ => None,
+                };
+                let index = index.ok_or_else(|| format!("after `id.` write an index like 1, not {}", self.found()))?;
+                self.i += 1;
+                Ok(Expr::Index(index))
+            }
+            other => Err(format!("expected a value but found `{other}`")),
         }
     }
 }
@@ -653,7 +568,7 @@ mod tests {
         assert!(matches!(ask("? harbor.age + 1"), Cond::Value(Expr::Bin(..))));
         assert!(matches!(ask("? in town_a: harbor.knows"), Cond::Value(Expr::In(..))));
         assert!(matches!(ask("? (in a: x feels happy) and not (in c: x feels happy)"), Cond::And(_)));
-        assert!(matches!(ask("? count (person q knows p) > 10"), Cond::Cmp(_, Expr::CountCond(_), _)));
-        assert!(matches!(ask("? sum harbor.knows.age / count harbor.knows"), Cond::Value(Expr::Bin(BinOp::Div, ..))));
+        assert!(matches!(ask("? count (person q knows p) > 10"), Cond::Cmp(_, Expr::Count(_), _)));
+        assert!(matches!(ask("? sum harbor.knows.age / count harbor.knows"), Cond::Value(Expr::Bin("/", ..))));
     }
 }

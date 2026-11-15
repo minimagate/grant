@@ -5,62 +5,35 @@ use crate::num::Rat;
 use crate::value::Sym;
 use std::fmt;
 
+/// The words that are never names.
+const KEYWORDS: [&str; 19] = [
+    "from", "kind", "rule", "never", "if", "where", "and", "or", "not", "the", "each", "in", "count", "sum", "min", "max", "div", "mod",
+    "id",
+];
+
+/// Punctuation, with the two-character marks first.
+const MARKS: [&str; 19] = ["!=", "<=", ">=", "[", "]", "(", ")", "|", ":", ".", ",", "?", "+", "-", "*", "/", "=", "<", ">"];
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum Tok {
-    Ident(Sym),
+    Name(Sym),
     Num(Rat),
     Text(Sym),
-    LBracket,
-    RBracket,
-    LParen,
-    RParen,
-    /// `|`, or a new line inside brackets.
-    Sep,
-    Colon,
-    Dot,
-    Comma,
-    Question,
-    Plus,
-    Minus,
+    /// A keyword or a punctuation mark, as written. `|` is also a new line inside brackets.
+    Sign(&'static str),
     /// A `-` written directly before a digit and not directly after a value, as in `age -2`.
     TightMinus,
-    Star,
-    Slash,
-    Eq,
-    Ne,
-    Lt,
-    Gt,
-    Le,
-    Ge,
 }
 
 impl fmt::Display for Tok {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let symbol = match self {
-            Tok::Ident(name) => return write!(f, "{name}"),
-            Tok::Num(n) => return write!(f, "{n}"),
-            Tok::Text(t) => return write!(f, "{t:?}"),
-            Tok::LBracket => "[",
-            Tok::RBracket => "]",
-            Tok::LParen => "(",
-            Tok::RParen => ")",
-            Tok::Sep => "|",
-            Tok::Colon => ":",
-            Tok::Dot => ".",
-            Tok::Comma => ",",
-            Tok::Question => "?",
-            Tok::Plus => "+",
-            Tok::Minus | Tok::TightMinus => "-",
-            Tok::Star => "*",
-            Tok::Slash => "/",
-            Tok::Eq => "=",
-            Tok::Ne => "!=",
-            Tok::Lt => "<",
-            Tok::Gt => ">",
-            Tok::Le => "<=",
-            Tok::Ge => ">=",
-        };
-        f.write_str(symbol)
+        match self {
+            Tok::Name(name) => write!(f, "{name}"),
+            Tok::Num(n) => write!(f, "{n}"),
+            Tok::Text(t) => write!(f, "{t:?}"),
+            Tok::Sign(sign) => f.write_str(sign),
+            Tok::TightMinus => f.write_str("-"),
+        }
     }
 }
 
@@ -81,7 +54,7 @@ pub enum LexError {
 
 pub fn lex(source: &str) -> Result<Vec<Line>, LexError> {
     let mut lines: Vec<Line> = Vec::new();
-    let mut open: Vec<(Tok, u32)> = Vec::new();
+    let mut open: Vec<(&str, u32)> = Vec::new();
     for (i, raw) in source.lines().enumerate() {
         let number = i as u32 + 1;
         let (tokens, code) = lex_line(raw).map_err(|m| LexError::Bad(number, m))?;
@@ -94,24 +67,21 @@ pub fn lex(source: &str) -> Result<Vec<Line>, LexError> {
         }
         let line = lines.last_mut().unwrap();
         // Inside brackets a new line separates, unless the line above was left unfinished.
-        let unfinished = matches!(
-            line.tokens.last(),
-            Some(Tok::Comma | Tok::Colon | Tok::LBracket | Tok::Sep | Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash)
-        );
-        if matches!(open.last(), Some((Tok::LBracket, _))) && !unfinished {
-            line.tokens.push(Tok::Sep);
+        let unfinished = matches!(line.tokens.last(), Some(Tok::Sign("," | ":" | "[" | "|" | "+" | "-" | "*" | "/")));
+        if matches!(open.last(), Some(("[", _))) && !unfinished {
+            line.tokens.push(Tok::Sign("|"));
         }
         if !line.text.is_empty() {
             line.text.push('\n');
         }
         line.text.push_str(code.trim_end());
         for token in tokens {
-            match &token {
-                Tok::LBracket | Tok::LParen => open.push((token.clone(), number)),
-                Tok::RBracket | Tok::RParen => {
-                    let opener = if token == Tok::RBracket { Tok::LBracket } else { Tok::LParen };
-                    if open.pop().map(|(t, _)| t) != Some(opener) {
-                        return Err(LexError::Bad(number, format!("this `{token}` closes nothing")));
+            match token {
+                Tok::Sign(opener @ ("[" | "(")) => open.push((opener, number)),
+                Tok::Sign(closer @ ("]" | ")")) => {
+                    let opener = if closer == "]" { "[" } else { "(" };
+                    if open.pop().map(|(o, _)| o) != Some(opener) {
+                        return Err(LexError::Bad(number, format!("this `{closer}` closes nothing")));
                     }
                 }
                 _ => {}
@@ -127,91 +97,60 @@ pub fn lex(source: &str) -> Result<Vec<Line>, LexError> {
 
 /// The tokens of one physical line, and the line without its comment.
 fn lex_line(raw: &str) -> Result<(Vec<Tok>, &str), String> {
-    let chars: Vec<(usize, char)> = raw.char_indices().collect();
+    // How much of the start of a text is made of these characters.
+    let run = |text: &str, of: fn(char) -> bool| text.find(|c| !of(c)).unwrap_or(text.len());
     let mut tokens = Vec::new();
-    let mut i = 0;
-    while i < chars.len() {
-        let (at, c) = chars[i];
-        let next = chars.get(i + 1).map(|p| p.1);
-        let end_of = |j: usize| chars.get(j).map_or(raw.len(), |p| p.0);
-        i += 1;
-        let token = match c {
-            ' ' | '\t' | '\r' => continue,
-            '-' if next == Some('-') => return Ok((tokens, &raw[..at])),
-            '-' => {
-                let after_value = i >= 2 && {
-                    let prev = chars[i - 2].1;
-                    prev.is_alphanumeric() || matches!(prev, '_' | ')' | ']' | '"' | '.')
-                };
-                if next.is_some_and(|n| n.is_ascii_digit()) && !after_value { Tok::TightMinus } else { Tok::Minus }
+    let mut at = 0;
+    while let Some(c) = raw[at..].chars().next() {
+        let rest = &raw[at..];
+        let (token, len) = match c {
+            ' ' | '\t' | '\r' => {
+                at += 1;
+                continue;
+            }
+            '-' if rest.starts_with("--") => return Ok((tokens, &raw[..at])),
+            '-' if rest[1..].starts_with(|c: char| c.is_ascii_digit())
+                && !raw[..at].ends_with(|c: char| c.is_alphanumeric() || matches!(c, '_' | ')' | ']' | '"' | '.')) =>
+            {
+                (Tok::TightMinus, 1)
             }
             '"' => {
                 let mut text = String::new();
+                let mut chars = rest[1..].char_indices();
                 loop {
-                    let Some(&(_, c)) = chars.get(i) else { return Err("this text never closes its `\"`".into()) };
-                    i += 1;
-                    match c {
-                        '"' => break,
-                        '\\' => {
-                            let escaped = chars.get(i).map(|p| p.1);
-                            i += 1;
-                            text.push(match escaped {
-                                Some('n') => '\n',
-                                Some(c @ ('"' | '\\')) => c,
-                                _ => return Err("after `\\` in text, write `\"`, `\\` or `n`".into()),
-                            });
-                        }
-                        c => text.push(c),
+                    match chars.next() {
+                        None => return Err("this text never closes its `\"`".into()),
+                        Some((i, '"')) => break (Tok::Text(text.into()), i + 2),
+                        Some((_, '\\')) => text.push(match chars.next() {
+                            Some((_, 'n')) => '\n',
+                            Some((_, c @ ('"' | '\\'))) => c,
+                            _ => return Err("after `\\` in text, write `\"`, `\\` or `n`".into()),
+                        }),
+                        Some((_, c)) => text.push(c),
                     }
                 }
-                Tok::Text(text.into())
             }
-            c if c.is_ascii_digit() => {
-                while chars.get(i).is_some_and(|p| p.1.is_ascii_digit()) {
-                    i += 1;
+            _ if c.is_ascii_digit() => {
+                let mut len = run(rest, |c| c.is_ascii_digit());
+                if let Some(fraction) = rest[len..].strip_prefix('.')
+                    && fraction.starts_with(|c: char| c.is_ascii_digit())
+                {
+                    len += 1 + run(fraction, |c| c.is_ascii_digit());
                 }
-                let fraction = chars.get(i).is_some_and(|p| p.1 == '.') && chars.get(i + 1).is_some_and(|p| p.1.is_ascii_digit());
-                if fraction {
-                    i += 1;
-                    while chars.get(i).is_some_and(|p| p.1.is_ascii_digit()) {
-                        i += 1;
-                    }
-                }
-                let literal = &raw[at..end_of(i)];
-                Tok::Num(Rat::parse(literal).ok_or_else(|| format!("{literal} is too large a number"))?)
+                let literal = &rest[..len];
+                (Tok::Num(Rat::parse(literal).ok_or_else(|| format!("{literal} is too large a number"))?), len)
             }
-            c if c.is_alphabetic() || c == '_' => {
-                while chars.get(i).is_some_and(|p| p.1.is_alphanumeric() || p.1 == '_') {
-                    i += 1;
-                }
-                Tok::Ident(raw[at..end_of(i)].into())
+            _ if c.is_alphabetic() || c == '_' => {
+                let word = &rest[..run(rest, |c| c.is_alphanumeric() || c == '_')];
+                (KEYWORDS.iter().find(|k| **k == word).map_or_else(|| Tok::Name(word.into()), |k| Tok::Sign(k)), word.len())
             }
-            '!' | '<' | '>' if next == Some('=') => {
-                i += 1;
-                match c {
-                    '!' => Tok::Ne,
-                    '<' => Tok::Le,
-                    _ => Tok::Ge,
-                }
-            }
-            '[' => Tok::LBracket,
-            ']' => Tok::RBracket,
-            '(' => Tok::LParen,
-            ')' => Tok::RParen,
-            '|' => Tok::Sep,
-            ':' => Tok::Colon,
-            '.' => Tok::Dot,
-            ',' => Tok::Comma,
-            '?' => Tok::Question,
-            '+' => Tok::Plus,
-            '*' => Tok::Star,
-            '/' => Tok::Slash,
-            '=' => Tok::Eq,
-            '<' => Tok::Lt,
-            '>' => Tok::Gt,
-            other => return Err(format!("`{other}` means nothing in Grant")),
+            _ => match MARKS.iter().find(|mark| rest.starts_with(**mark)) {
+                Some(mark) => (Tok::Sign(mark), mark.len()),
+                None => return Err(format!("`{c}` means nothing in Grant")),
+            },
         };
         tokens.push(token);
+        at += len;
     }
     Ok((tokens, raw))
 }
@@ -226,18 +165,19 @@ mod tests {
             lex("kind person [\n  age: one number -- years\n  knows: person\n]\nrule a: person p is b if\n  p.age >= 18\n\nperson liz")
                 .unwrap();
         assert_eq!(lines.len(), 3);
-        assert_eq!(lines[0].tokens.iter().filter(|t| **t == Tok::Sep).count(), 2);
+        assert_eq!(lines[0].tokens.iter().filter(|t| **t == Tok::Sign("|")).count(), 2);
         assert_eq!(lines[1].number, 5);
         assert!(lines[1].text.ends_with("p.age >= 18"));
     }
 
     #[test]
     fn minus_is_tight_only_before_a_literal() {
-        let kinds =
-            |s: &str| lex(s).unwrap()[0].tokens.iter().filter(|t| matches!(t, Tok::Minus | Tok::TightMinus)).cloned().collect::<Vec<_>>();
-        assert_eq!(kinds("x age -2"), [Tok::TightMinus]);
-        assert_eq!(kinds("? x.age - 2"), [Tok::Minus]);
-        assert_eq!(kinds("? x.age-2"), [Tok::Minus]);
+        let minuses = |s: &str| {
+            lex(s).unwrap()[0].tokens.iter().filter(|t| matches!(t, Tok::Sign("-") | Tok::TightMinus)).cloned().collect::<Vec<_>>()
+        };
+        assert_eq!(minuses("x age -2"), [Tok::TightMinus]);
+        assert_eq!(minuses("? x.age - 2"), [Tok::Sign("-")]);
+        assert_eq!(minuses("? x.age-2"), [Tok::Sign("-")]);
     }
 
     #[test]

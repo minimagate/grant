@@ -16,9 +16,9 @@ pub fn source(world: &World) -> String {
         lines.push("-- some handles are shared by several objects, so this listing can't be run as it is\n".into());
     }
 
-    for (name, kind) in world.kinds.iter().filter(|(name, _)| !is_primitive(name)) {
+    for (name, shape) in world.kinds.iter().filter(|(name, _)| !is_primitive(name)) {
         let plus = if &**name == "world" { "+ " } else { "" };
-        let fields: Vec<String> = kind.fields.iter().map(|(rel, field)| format!("{plus}{rel}: {field}")).collect();
+        let fields: Vec<String> = shape.iter().map(|(rel, field)| format!("{plus}{rel}: {field}")).collect();
         match fields.as_slice() {
             [] if &**name == "world" => {}
             [] => lines.push(format!("kind {name}")),
@@ -34,7 +34,7 @@ pub fn source(world: &World) -> String {
     for (id, object) in &world.objects {
         stated.insert(*id);
         let mut values: BTreeMap<&Sym, Vec<String>> = BTreeMap::new();
-        for (rel, value) in world.facts.of(*id) {
+        for (_, rel, value) in world.facts.iter().filter(|(subj, ..)| subj == id) {
             match value {
                 Value::Obj(other) if !stated.contains(other) => later.push(format!("{} {rel} {}", object.handle, world.show(value))),
                 _ => values.entry(rel).or_default().push(world.show(value)),

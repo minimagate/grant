@@ -1,18 +1,19 @@
 //! Running statements: each line changes K, O, F or R of its world, or asks about it.
 
-use crate::ast::{Assign, Cond, EachAction, Expr, ShapeEdit, Stmt, Values};
+use crate::ast::{Assign, Change, Cond, EachAction, Expr, ShapeEdit, Stmt};
 use crate::compile::{self, Compiler};
 use crate::error::{Error, Fail, Res};
 use crate::eval::{Env, Eval, View};
 use crate::lexer::Line;
 use crate::loader::Loader;
-use crate::logic::{CCond, CExpr, Var, expr_slots};
+use crate::logic::{CExpr, Var, expr_slots};
 use crate::model;
 use crate::parser::parse;
-use crate::value::{ObjId, Sym, Value, a, is_primitive, some};
+use crate::value::{ObjId, PRIMITIVES, Sym, Value, a, is_primitive, plural, some};
 use crate::world::{World, next_id};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 /// What a line showed: the answer to a question, or a remark about a change.
 #[derive(Clone, Debug, PartialEq)]
@@ -22,95 +23,70 @@ pub struct Output {
     pub text: String,
 }
 
-/// A world being stated, line by line.
+/// A world being stated, line by line. It has no identity until its first line is run.
 #[derive(Clone)]
 pub struct Session {
     pub world: World,
     dir: PathBuf,
     file: Option<PathBuf>,
-    begun: bool,
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum Op {
-    Set,
-    Add,
-    Remove,
 }
 
 /// One bracket entry, ready to compute: `rel: values`.
 struct Plan {
     rel: Sym,
-    op: Op,
+    change: Change,
     values: Vec<CExpr>,
 }
 
-struct Change {
+/// What a plan does to one subject.
+struct Edit {
     subj: ObjId,
     rel: Sym,
-    op: Op,
+    change: Change,
     values: Vec<Value>,
 }
 
 impl Session {
     /// Starts an empty world. `dir` is where the names of other worlds resolve from.
     pub fn new(name: &str, dir: &Path, file: Option<&Path>) -> Session {
-        Session { world: World::new(0, name), dir: dir.into(), file: file.map(Into::into), begun: false }
+        Session { world: World::new(0, name), dir: dir.into(), file: file.map(Into::into) }
     }
 
     /// Runs one statement and returns what it showed.
     pub fn run(&mut self, loader: &mut Loader, line: &Line) -> Result<Vec<Output>, Error> {
         let mut said = Vec::new();
-        let result = parse(&line.tokens).map_err(Fail::from).and_then(|stmt| self.exec(loader, stmt, line, &mut said));
-        self.begun = true;
-        match result {
+        match parse(&line.tokens).map_err(Fail::from).and_then(|stmt| self.exec(loader, stmt, line, &mut said)) {
             Ok(()) => Ok(said.into_iter().map(|text| Output { line: line.number, source: line.text.clone(), text }).collect()),
-            Err(fail) => {
-                let (message, cause) = match fail {
-                    Fail::Message(message) => (message, None),
-                    Fail::Parent(message, cause) => (message, Some(cause)),
-                };
-                Err(self.error(Some(line), vec![message], cause))
-            }
+            Err(Fail(message, cause)) => Err(self.error(Some(line), vec![message], cause)),
         }
     }
 
     /// Ends the world: checks every constraint, shape word and leftover disagreement.
     pub fn finish(mut self) -> Result<World, Error> {
-        if !self.begun {
+        if self.world.id == 0 {
             // A world with no lines is still a world of its own.
             self.world.id = next_id();
         }
-        match model::check(&self.world) {
-            Ok(problems) if problems.is_empty() => Ok(self.world),
-            Ok(problems) => Err(self.error(None, problems, None)),
-            Err(message) => Err(self.error(None, vec![message], None)),
-        }
+        let problems = model::check(&self.world).unwrap_or_else(|message| vec![message]);
+        if problems.is_empty() { Ok(self.world) } else { Err(self.error(None, problems, None)) }
     }
 
-    fn error(&self, line: Option<&Line>, messages: Vec<String>, cause: Option<std::rc::Rc<Error>>) -> Error {
-        Error {
-            world: self.world.name.to_string(),
-            file: self.file.clone(),
-            line: line.map(|l| l.number),
-            source: line.map(|l| l.text.clone()),
-            messages,
-            cause,
-        }
+    fn error(&self, line: Option<&Line>, messages: Vec<String>, cause: Option<Rc<Error>>) -> Error {
+        let line = line.map(|l| (l.number, l.text.clone()));
+        Error { world: self.world.name.to_string(), file: self.file.clone(), line, messages, cause }
     }
 
     fn exec(&mut self, loader: &mut Loader, stmt: Stmt, line: &Line, said: &mut Vec<String>) -> Result<(), Fail> {
-        if !self.begun && !matches!(stmt, Stmt::From(_)) {
+        let first = self.world.id == 0;
+        if first && !matches!(stmt, Stmt::From(_)) {
             self.world.id = next_id();
         }
         match stmt {
+            Stmt::From(_) if !first => return Err("`from` comes first, and lists every parent on one line".to_string().into()),
             Stmt::From(names) => {
-                if self.begun {
-                    return Err("`from` comes first, and lists every parent on one line".to_string().into());
-                }
                 let (mut parents, mut primitives) = (Vec::new(), Vec::new());
                 for name in &names {
-                    match crate::value::PRIMITIVES.iter().find(|(_, world)| world == name) {
+                    match PRIMITIVES.iter().find(|(_, world)| world == name) {
                         Some((kind, _)) => primitives.push(Sym::from(*kind)),
                         None => parents.push(loader.named(&self.dir, name)?),
                     }
@@ -125,11 +101,8 @@ impl Session {
                     return Err(format!("`{handle}` is already a kind").into());
                 }
                 let id = match path {
-                    Some(path) => {
-                        let held = loader.named(&self.dir, &path)?;
-                        self.world.hold(&handle, held)
-                    }
-                    None if is_primitive(&kind) && self.world.kinds.contains_key(&kind) => {
+                    Some(path) => self.world.hold(&handle, loader.named(&self.dir, &path)?),
+                    None if self.world.has_primitive(&kind) => {
                         return Err(format!("{} isn't created; it is written, like `24` or `\"text\"`", a(&kind)).into());
                     }
                     None if !self.world.kinds.contains_key(&kind) => return Err(self.world.no_kind(&kind).into()),
@@ -138,16 +111,13 @@ impl Session {
                 self.set(id, &values)?;
             }
             Stmt::Fact { subj, rel, value } => {
-                let (subj, values) = {
-                    let mut c = Compiler::new(&self.world);
-                    let (subj, value) = (c.expr(&subj)?, c.expr(&value)?);
-                    let subj = self.one(&c.vars, &subj)?;
-                    let kind = &self.world.objects[&subj].kind;
-                    self.world.relation(kind, &rel)?;
-                    let values = self.values(&c.vars, &value, &mut Vec::new())?;
-                    values.iter().try_for_each(|v| self.world.check_value(kind, &rel, v))?;
-                    (subj, values)
-                };
+                let mut c = Compiler::new(&self.world);
+                let (subj, value) = (c.expr(&subj)?, c.expr(&value)?);
+                let subj = self.one(c.eval(), &subj)?;
+                let kind = &self.world.objects[&subj].kind;
+                self.world.relation(kind, &rel)?;
+                let values = self.values(c.eval(), &value, &mut Vec::new())?;
+                values.iter().try_for_each(|v| self.world.check_value(kind, &rel, v))?;
                 values.into_iter().for_each(|v| self.world.state(subj, &rel, v));
             }
             Stmt::Set { subj, values } => {
@@ -155,30 +125,27 @@ impl Session {
                 self.set(subj, &values)?;
             }
             Stmt::Remove { subj, rel, value } => self.remove(&subj, rel, value.as_ref(), said)?,
-            Stmt::Each { kind, var, cond, action } => self.each(&kind, &var, cond.as_ref(), &action, said)?,
+            Stmt::Each { kind, var, cond, action } => self.each(&kind, &var, &cond, &action, said)?,
             Stmt::Rule { name, head, cond } => {
                 let rule = compile::rule(&self.world, &name, &one_line(&line.text), &head, &cond)?;
                 if let Some(problem) = model::tangle_with(&self.world, &rule) {
                     return Err(problem.into());
                 }
-                self.world.set_rule(rule);
+                self.world.set_rule(&name, Some(rule));
                 // Derive now, so a rule that can't settle fails on its own line.
                 self.world.model()?;
             }
             Stmt::Never { name, kind, var, cond } => {
-                if !self.world.is_thing(&kind) && self.world.kinds.contains_key(&kind) {
-                    return Err(format!("a constraint is about things, not about {}", a(&kind)).into());
-                }
                 let never = compile::never(&self.world, &name, &one_line(&line.text), &kind, &var, &cond)?;
-                self.world.set_never(never);
+                self.world.set_never(&name, Some(never));
             }
             Stmt::RemoveRule(name) => {
-                if !self.world.remove_rule(&name) {
+                if !self.world.set_rule(&name, None) {
                     said.push(format!("nothing removed: there is no rule `{name}`"));
                 }
             }
             Stmt::RemoveNever(name) => {
-                if !self.world.remove_never(&name) {
+                if !self.world.set_never(&name, None) {
                     said.push(format!("nothing removed: there is no never `{name}`"));
                 }
             }
@@ -198,17 +165,16 @@ impl Session {
     // --- evaluating ---
 
     /// The values of an expression on this line. Missing values don't compute.
-    fn values(&self, vars: &[Var], e: &CExpr, env: &mut Env) -> Res<Vec<Value>> {
-        if let CExpr::Const(value) = e {
-            return Ok(vec![value.clone()]);
-        }
-        env.resize(vars.len(), None);
-        let model = self.world.model()?;
-        Eval { vars }.expr(e, env, &View { world: &self.world, facts: &model.facts }, true)
+    fn values(&self, eval: Eval, e: &CExpr, env: &mut Env) -> Res<Vec<Value>> {
+        env.resize(eval.vars.len(), None);
+        // A value that is written out needs nothing derived.
+        let stated = View { world: &self.world, facts: &self.world.facts };
+        let view = if matches!(e, CExpr::Const(_) | CExpr::Obj(_)) { stated } else { View::of(&self.world)? };
+        eval.expr(e, env, &view, true)
     }
 
-    fn one(&self, vars: &[Var], e: &CExpr) -> Res<ObjId> {
-        match self.values(vars, e, &mut Vec::new())?.as_slice() {
+    fn one(&self, eval: Eval, e: &CExpr) -> Res<ObjId> {
+        match self.values(eval, e, &mut Vec::new())?.as_slice() {
             [Value::Obj(id)] => Ok(*id),
             _ => Err("a fact is about one thing".into()),
         }
@@ -218,60 +184,49 @@ impl Session {
     fn object(&self, reference: &Expr) -> Res<ObjId> {
         let mut c = Compiler::new(&self.world);
         let e = c.expr(reference)?;
-        self.one(&c.vars, &e)
+        self.one(c.eval(), &e)
     }
 
     // --- brackets ---
 
     fn plan(c: &mut Compiler, kind: &Sym, assigns: &[Assign]) -> Res<Vec<Plan>> {
         let mut plans = Vec::new();
-        for assign in assigns {
-            c.world.relation(kind, &assign.rel)?;
-            let rel = assign.rel.clone();
-            match &assign.values {
-                Values::Set(values) => {
-                    let values = values.iter().map(|e| c.expr(e)).collect::<Res<_>>()?;
-                    plans.push(Plan { rel, op: Op::Set, values });
-                }
-                Values::Change(changes) => {
-                    for (adds, e) in changes {
-                        let op = if *adds { Op::Add } else { Op::Remove };
-                        plans.push(Plan { rel: rel.clone(), op, values: vec![c.expr(e)?] });
-                    }
-                }
-            }
+        for Assign { rel, change, values } in assigns {
+            c.world.relation(kind, rel)?;
+            let values = values.iter().map(|e| c.expr(e)).collect::<Res<_>>()?;
+            plans.push(Plan { rel: rel.clone(), change: *change, values });
         }
         Ok(plans)
     }
 
     /// Computes what the plans change for one subject, against the world as it stands.
-    fn compute(&self, vars: &[Var], plans: &[Plan], subj: ObjId, env: &mut Env) -> Res<Vec<Change>> {
+    fn compute(&self, eval: Eval, plans: &[Plan], subj: ObjId, env: &mut Env) -> Res<Vec<Edit>> {
         let kind = &self.world.objects[&subj].kind;
-        let mut changes = Vec::new();
+        let mut edits = Vec::new();
         for plan in plans {
             let mut values = Vec::new();
             for e in &plan.values {
-                values.extend(self.values(vars, e, env)?);
+                values.extend(self.values(eval, e, env)?);
             }
-            if plan.op != Op::Remove {
+            if plan.change != Change::Remove {
                 values.iter().try_for_each(|v| self.world.check_value(kind, &plan.rel, v))?;
             }
-            changes.push(Change { subj, rel: plan.rel.clone(), op: plan.op, values });
+            edits.push(Edit { subj, rel: plan.rel.clone(), change: plan.change, values });
         }
-        Ok(changes)
+        Ok(edits)
     }
 
-    /// Applies computed changes. Everything a set replaces goes first, so sets on the same
+    /// Applies computed edits. Everything a set replaces goes first, so sets on the same
     /// relation add up.
-    fn apply(&mut self, changes: Vec<Change>) {
-        for change in changes.iter().filter(|c| c.op == Op::Set) {
-            self.world.clear(change.subj, &change.rel);
+    fn apply(&mut self, edits: Vec<Edit>) {
+        for edit in edits.iter().filter(|e| e.change == Change::Set) {
+            self.world.clear(edit.subj, &edit.rel);
         }
-        for change in changes {
-            for value in change.values {
-                match change.op {
-                    Op::Remove => drop(self.world.unstate(change.subj, &change.rel, &value)),
-                    _ => self.world.state(change.subj, &change.rel, value),
+        for edit in edits {
+            for value in edit.values {
+                match edit.change {
+                    Change::Remove => drop(self.world.unstate(edit.subj, &edit.rel, &value)),
+                    _ => self.world.state(edit.subj, &edit.rel, value),
                 }
             }
         }
@@ -281,12 +236,10 @@ impl Session {
         if assigns.is_empty() {
             return Ok(());
         }
-        let changes = {
-            let mut c = Compiler::new(&self.world);
-            let plans = Self::plan(&mut c, &self.world.objects[&subj].kind, assigns)?;
-            self.compute(&c.vars, &plans, subj, &mut Vec::new())?
-        };
-        self.apply(changes);
+        let mut c = Compiler::new(&self.world);
+        let plans = Self::plan(&mut c, &self.world.objects[&subj].kind, assigns)?;
+        let edits = self.compute(c.eval(), &plans, subj, &mut Vec::new())?;
+        self.apply(edits);
         Ok(())
     }
 
@@ -294,10 +247,7 @@ impl Session {
 
     fn kind(&mut self, name: &Sym, edits: Vec<ShapeEdit>) -> Res<()> {
         if is_primitive(name) {
-            return Err(match self.world.kinds.contains_key(name) {
-                true => format!("{} has no relations", a(name)),
-                false => self.world.no_kind(name),
-            });
+            return Err(if self.world.has_primitive(name) { format!("{} has no relations", a(name)) } else { self.world.no_kind(name) });
         }
         if !self.world.find(name).is_empty() {
             return Err(format!("`{name}` is already an object"));
@@ -308,15 +258,13 @@ impl Session {
                 ShapeEdit::Declare(_, field) | ShapeEdit::Set(_, field) if !self.world.kinds.contains_key(&field.kind) => {
                     return Err(self.world.no_kind(&field.kind));
                 }
-                ShapeEdit::Declare(rel, field) => {
-                    match self.world.field(name, &rel) {
-                        Some(old) if *old != field || self.world.is_disputed(name, &rel) => {
-                            return Err(format!("{name} already declares `{rel}: {old}`; write `+ {rel}: {field}` to change it"));
-                        }
-                        _ => self.world.set_field(name, &rel, field),
-                    };
-                }
-                ShapeEdit::Set(rel, field) => self.world.set_field(name, &rel, field),
+                ShapeEdit::Declare(rel, field) => match self.world.field(name, &rel) {
+                    Some(old) if *old != field || self.world.is_disputed(name, &rel) => {
+                        return Err(format!("{name} already declares `{rel}: {old}`; write `+ {rel}: {field}` to change it"));
+                    }
+                    _ => self.world.set_field(name, &rel, Some(field)),
+                },
+                ShapeEdit::Set(rel, field) => self.world.set_field(name, &rel, Some(field)),
                 ShapeEdit::Remove(rel) => {
                     let using = self.world.of_kind(name).filter(|id| self.world.facts.values(*id, &rel).next().is_some()).count();
                     if using > 0 {
@@ -326,7 +274,7 @@ impl Session {
                     if let Some(rule) = self.world.rules.values().find(|r| r.rel == rel && r.vars[r.subj].kind == *name) {
                         return Err(format!("rule `{}` still produces `{rel}`", rule.name));
                     }
-                    self.world.remove_field(name, &rel);
+                    self.world.set_field(name, &rel, None);
                 }
             }
         }
@@ -345,8 +293,8 @@ impl Session {
             let verb = if objects == 1 { "uses" } else { "use" };
             return Err(format!("{} still {verb} `{name}`", some(objects, name)));
         }
-        for (other, kind) in &self.world.kinds {
-            if let Some((rel, field)) = kind.fields.iter().find(|(_, f)| f.kind == *name)
+        for (other, shape) in &self.world.kinds {
+            if let Some((rel, field)) = shape.iter().find(|(_, f)| f.kind == *name)
                 && other != name
             {
                 return Err(format!("{other} still uses `{name}` (`{rel}: {field}`)"));
@@ -369,8 +317,8 @@ impl Session {
     /// and no longer match anything through it.
     fn remove_object(&mut self, id: ObjId, said: &mut Vec<String>) {
         let name = self.world.show(&Value::Obj(id));
-        let rules = self.world.rules.values().filter(|r| r.objects().contains(&id)).map(|r| format!("rule `{}`", r.name));
-        let nevers = self.world.nevers.values().filter(|n| n.objects().contains(&id)).map(|n| format!("never `{}`", n.name));
+        let rules = self.world.rules.values().filter(|r| r.objects.contains(&id)).map(|r| format!("rule `{}`", r.name));
+        let nevers = self.world.nevers.values().filter(|n| n.objects.contains(&id)).map(|n| format!("never `{}`", n.name));
         said.extend(rules.chain(nevers).map(|naming| format!("{naming} names {name}, and matches nothing through it now")));
         self.world.remove_object(id);
     }
@@ -407,30 +355,24 @@ impl Session {
             said.push(format!("nothing removed: {kind} has no relation `{rel}`"));
             return Ok(());
         }
+        let Some(value) = value else {
+            self.world.clear(subj, &rel);
+            return self.still_follows(subj, &rel, said);
+        };
+        let mut c = Compiler::new(&self.world);
+        let value = c.expr(value)?;
+        let values = self.values(c.eval(), &value, &mut Vec::new())?;
+        let stated: Vec<bool> = values.iter().map(|v| self.world.unstate(subj, &rel, v)).collect();
+        let model = self.world.model()?;
         let name = self.world.show(&Value::Obj(subj));
-        match value {
-            Some(value) => {
-                let values = {
-                    let mut c = Compiler::new(&self.world);
-                    let value = c.expr(value)?;
-                    self.values(&c.vars, &value, &mut Vec::new())?
-                };
-                let stated: Vec<bool> = values.iter().map(|v| self.world.unstate(subj, &rel, v)).collect();
-                let model = self.world.model()?;
-                for (value, stated) in values.iter().zip(stated) {
-                    if let Some(rule) = model.why.get(&(subj, rel.clone(), value.clone())) {
-                        said.push(match (stated, values.len()) {
-                            (true, 1) => format!("removed, but it still follows from rule {rule}"),
-                            (false, 1) => format!("it isn't stated here; it follows from rule {rule}"),
-                            (true, _) => format!("removed, but {name} {rel} {} still follows from rule {rule}", self.world.show(value)),
-                            (false, _) => format!("{name} {rel} {} isn't stated here; it follows from rule {rule}", self.world.show(value)),
-                        });
-                    }
-                }
-            }
-            None => {
-                self.world.clear(subj, &rel);
-                self.still_follows(subj, &rel, said)?;
+        for (value, stated) in values.iter().zip(stated) {
+            if let Some(rule) = model.why.get(&(subj, rel.clone(), value.clone())) {
+                said.push(match (stated, values.len()) {
+                    (true, 1) => format!("removed, but it still follows from rule {rule}"),
+                    (false, 1) => format!("it isn't stated here; it follows from rule {rule}"),
+                    (true, _) => format!("removed, but {name} {rel} {} still follows from rule {rule}", self.world.show(value)),
+                    (false, _) => format!("{name} {rel} {} isn't stated here; it follows from rule {rule}", self.world.show(value)),
+                });
             }
         }
         Ok(())
@@ -438,65 +380,56 @@ impl Session {
 
     // --- each ---
 
-    fn each(&mut self, kind: &Sym, var: &Sym, cond: Option<&Cond>, action: &EachAction, said: &mut Vec<String>) -> Res<()> {
-        if is_primitive(kind) && self.world.kinds.contains_key(kind) {
-            return Err(format!("`each` goes through things, and there is no end of {}", crate::value::plural(kind)));
+    fn each(&mut self, kind: &Sym, var: &Sym, cond: &Cond, action: &EachAction, said: &mut Vec<String>) -> Res<()> {
+        if self.world.has_primitive(kind) {
+            return Err(format!("`each` goes through things, and there is no end of {}", plural(kind)));
         }
-        let mut changes = Vec::new();
-        let mut doomed = BTreeSet::new();
-        {
-            let mut c = Compiler::new(&self.world);
-            let subj = c.open(&[(kind, var)], &cond.into_iter().collect::<Vec<_>>())?[0];
-            let cond = match cond {
-                Some(cond) => c.cond(cond)?,
-                None => CCond::And(Vec::new()),
-            };
-            // `None` removes the objects themselves.
-            let plans = match action {
-                EachAction::Set(assigns) => Some(Self::plan(&mut c, kind, assigns)?),
-                EachAction::Fact(rel, value) => {
-                    self.world.relation(kind, rel)?;
-                    Some(vec![Plan { rel: rel.clone(), op: Op::Add, values: vec![c.expr(value)?] }])
-                }
-                EachAction::RemoveObjects => None,
-                EachAction::RemoveRel(rel, _) if self.world.field(kind, rel).is_none() => {
-                    said.push(format!("nothing removed: {kind} has no relation `{rel}`"));
-                    return Ok(());
-                }
-                EachAction::RemoveRel(rel, None) => Some(vec![Plan { rel: rel.clone(), op: Op::Set, values: Vec::new() }]),
-                EachAction::RemoveRel(rel, Some(value)) => {
-                    Some(vec![Plan { rel: rel.clone(), op: Op::Remove, values: vec![c.expr(value)?] }])
-                }
-            };
-            let mut needs = vec![subj];
-            for plan in plans.iter().flatten() {
-                plan.values.iter().for_each(|e| expr_slots(e, &mut needs));
+        let mut c = Compiler::new(&self.world);
+        let subj = c.open(&[(kind, var)], cond)?[0];
+        let cond = c.cond(cond)?;
+        // `None` removes the objects themselves.
+        let one = |rel: &Sym, change, values| Some(vec![Plan { rel: rel.clone(), change, values }]);
+        let plans = match action {
+            EachAction::Set(assigns) => Some(Self::plan(&mut c, kind, assigns)?),
+            EachAction::Fact(rel, value) => {
+                self.world.relation(kind, rel)?;
+                one(rel, Change::Add, vec![c.expr(value)?])
             }
-            let model = self.world.model()?;
-            let view = View { world: &self.world, facts: &model.facts };
-            let eval = Eval { vars: &c.vars };
-            let mut matches = BTreeSet::new();
-            eval.solve(&cond, &mut vec![None; c.vars.len()], &view, &mut |env| {
-                eval.ground(&needs, env, &view, &mut |env| {
-                    matches.insert(env.clone());
-                    Ok(true)
-                })
-            })?;
-            // Every value is computed here, before anything changes.
-            for mut env in matches {
-                let Some(Value::Obj(id)) = env[subj] else { continue };
-                match &plans {
-                    Some(plans) => changes.extend(self.compute(&c.vars, plans, id, &mut env)?),
-                    None => drop(doomed.insert(id)),
-                }
+            EachAction::RemoveObjects => None,
+            EachAction::RemoveRel(rel, _) if self.world.field(kind, rel).is_none() => {
+                said.push(format!("nothing removed: {kind} has no relation `{rel}`"));
+                return Ok(());
+            }
+            EachAction::RemoveRel(rel, None) => one(rel, Change::Set, Vec::new()),
+            EachAction::RemoveRel(rel, Some(value)) => one(rel, Change::Remove, vec![c.expr(value)?]),
+        };
+        let mut needs = vec![subj];
+        for plan in plans.iter().flatten() {
+            plan.values.iter().for_each(|e| expr_slots(e, &mut needs));
+        }
+        let (eval, view) = (c.eval(), View::of(&self.world)?);
+        let mut matches = BTreeSet::new();
+        eval.solve(&cond, &mut vec![None; c.vars.len()], &view, &mut |env| {
+            eval.ground(&needs, env, &view, &mut |env| {
+                matches.insert(env.clone());
+                Ok(true)
+            })
+        })?;
+        // Every value is computed here, before anything changes.
+        let (mut edits, mut doomed) = (Vec::new(), BTreeSet::new());
+        for mut env in matches {
+            let Some(Value::Obj(id)) = env[subj] else { continue };
+            match &plans {
+                Some(plans) => edits.extend(self.compute(eval, plans, id, &mut env)?),
+                None => drop(doomed.insert(id)),
             }
         }
         doomed.into_iter().for_each(|id| self.remove_object(id, said));
         let emptied: BTreeSet<(ObjId, Sym)> = match action {
-            EachAction::RemoveRel(..) => changes.iter().map(|c| (c.subj, c.rel.clone())).collect(),
+            EachAction::RemoveRel(..) => edits.iter().map(|e| (e.subj, e.rel.clone())).collect(),
             _ => BTreeSet::new(),
         };
-        self.apply(changes);
+        self.apply(edits);
         emptied.iter().try_for_each(|(subj, rel)| self.still_follows(*subj, rel, said))
     }
 
@@ -518,13 +451,11 @@ impl Session {
         };
         if let Cond::Value(value) = question {
             let value = c.expr(value)?;
-            return Ok(list(&self.values(&c.vars, &value, &mut Vec::new())?));
+            return Ok(list(&self.values(c.eval(), &value, &mut Vec::new())?));
         }
-        let asked = c.open(&[], &[question])?;
+        let asked = c.open(&[], question)?;
         let cond = c.cond(question)?;
-        let model = self.world.model()?;
-        let view = View { world: &self.world, facts: &model.facts };
-        let eval = Eval { vars: &c.vars };
+        let (eval, view) = (c.eval(), View::of(&self.world)?);
         let mut env = vec![None; c.vars.len()];
         if asked.is_empty() {
             return Ok(if eval.holds(&cond, &mut env, &view)? { "yes" } else { "no" }.into());
