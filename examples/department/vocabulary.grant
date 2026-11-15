@@ -2,7 +2,9 @@ from numbers, text
 
 kind area
 kind role
-kind room [ seats: one number ]
+kind room [
+  seats:  one number
+]
 kind slot [
   day:   one number
   hour:  one number

@@ -58,7 +58,7 @@ Three rooms with their seats and eight slots, each with a day (1 is Monday) and 
 
 ### `people`
 
-Built on `vocabulary` and `catalogue`. Four lecturers with the areas they can teach, and five students with what they have passed and what they want. Short entries are on one line; long ones put one relation per line.
+Built on `vocabulary` and `catalogue`. Four lecturers with the areas they can teach, and five students with what they have passed and what they want. Every object is written with one relation per line.
 
 ### `department`
 

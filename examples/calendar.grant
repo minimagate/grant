@@ -1,13 +1,29 @@
 from numbers, text
 
-kind weekday [ number: one number ]
-weekday thursday  [ number: 0 ]
-weekday friday    [ number: 1 ]
-weekday saturday  [ number: 2 ]
-weekday sunday    [ number: 3 ]
-weekday monday    [ number: 4 ]
-weekday tuesday   [ number: 5 ]
-weekday wednesday [ number: 6 ]
+kind weekday [
+  number:  one number
+]
+weekday thursday [
+  number:  0
+]
+weekday friday [
+  number:  1
+]
+weekday saturday [
+  number:  2
+]
+weekday sunday [
+  number:  3
+]
+weekday monday [
+  number:  4
+]
+weekday tuesday [
+  number:  5
+]
+weekday wednesday [
+  number:  6
+]
 
 kind date [
   days:    one number
@@ -32,7 +48,9 @@ rule day:   date d day d.doy - (153 * d.mp + 2) div 5 + 1
 rule month: date d month (d.mp + 2) mod 12 + 1
 rule year:  date d year d.yoe + d.era * 400 + (13 - d.month) div 11
 
-date today [ days: 20771 ]
+date today [
+  days:  20771
+]
 
 ? today.year
 ? today.month

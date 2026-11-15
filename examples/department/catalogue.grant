@@ -5,13 +5,45 @@ area analysis
 area geometry
 area logic
 
-course linear_algebra [ title: "Linear Algebra" | credits: 9  | area: algebra ]
-course analysis_1     [ title: "Analysis I"     | credits: 12 | area: analysis ]
-course logic_1        [ title: "Logic"          | credits: 6  | area: logic ]
-course analysis_2     [ title: "Analysis II"    | credits: 12 | area: analysis | requires: analysis_1 ]
-course group_theory   [ title: "Group Theory"   | credits: 6  | area: algebra  | requires: linear_algebra ]
-course topology       [ title: "Topology"       | credits: 9  | area: geometry | requires: analysis_1 ]
-course galois_theory  [ title: "Galois Theory"  | credits: 6  | area: algebra  | requires: group_theory ]
+course linear_algebra [
+  title:    "Linear Algebra"
+  credits:  9
+  area:     algebra
+]
+course analysis_1 [
+  title:    "Analysis I"
+  credits:  12
+  area:     analysis
+]
+course logic_1 [
+  title:    "Logic"
+  credits:  6
+  area:     logic
+]
+course analysis_2 [
+  title:     "Analysis II"
+  credits:   12
+  area:      analysis
+  requires:  analysis_1
+]
+course group_theory [
+  title:     "Group Theory"
+  credits:   6
+  area:      algebra
+  requires:  linear_algebra
+]
+course topology [
+  title:     "Topology"
+  credits:   9
+  area:      geometry
+  requires:  analysis_1
+]
+course galois_theory [
+  title:     "Galois Theory"
+  credits:   6
+  area:      algebra
+  requires:  group_theory
+]
 course differential_geometry [
   title:     "Differential Geometry"
   credits:   9

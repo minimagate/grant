@@ -1,9 +1,25 @@
 from vocabulary, catalogue
 
-person noether [ name: "Emmy"     | is: lecturer | can_teach: algebra, logic ]
-person cauchy  [ name: "Augustin" | is: lecturer | can_teach: analysis ]
-person riemann [ name: "Bernhard" | is: lecturer | can_teach: geometry, analysis ]
-person godel   [ name: "Kurt"     | is: lecturer | can_teach: logic ]
+person noether [
+  name:       "Emmy"
+  is:         lecturer
+  can_teach:  algebra, logic
+]
+person cauchy [
+  name:       "Augustin"
+  is:         lecturer
+  can_teach:  analysis
+]
+person riemann [
+  name:       "Bernhard"
+  is:         lecturer
+  can_teach:  geometry, analysis
+]
+person godel [
+  name:       "Kurt"
+  is:         lecturer
+  can_teach:  logic
+]
 
 person ada [
   name:   "Ada"

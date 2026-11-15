@@ -22,9 +22,19 @@ condition peace
 condition adult
 condition lonely
 
-person liz    [ age: 27 | lives_in: pisa ]
-person laurie [ age: 30 | lives_in: rome ]
-person harbor [ age: 24 | lives_in: pisa | knows: liz, laurie ]
+person liz [
+  age:       27
+  lives_in:  pisa
+]
+person laurie [
+  age:       30
+  lives_in:  rome
+]
+person harbor [
+  age:       24
+  lives_in:  pisa
+  knows:     liz, laurie
+]
 
 harbor feels happy
 
@@ -47,7 +57,10 @@ never sensible_age: person p where p.age < 0 or p.age > 150
 ? liz can_reach laurie
 ? person p is lonely
 
-harbor [ lives_in: rome | age: harbor.age + 1 ]
+harbor [
+  lives_in:  rome
+  age:       harbor.age + 1
+]
 - harbor knows liz
 - harbor feels happy
 
