@@ -6,7 +6,7 @@ each person s where s is student [ passed: + s.may_take ]
 - claire
 - ellie
 - godel
-person felix [ name: "Felix" | is: student | wants: linear_algebra, logic_1, group_theory ]
+person felix [ name: Felix | is: student | wants: linear_algebra, logic_1, group_theory ]
 
 ada   [ wants: analysis_2, group_theory, topology ]
 blake [ wants: galois_theory, differential_geometry ]

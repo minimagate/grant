@@ -148,7 +148,7 @@ Values: `harbor.knows.age` follows relations; `+ - * / div mod`, `< > <= >= = !=
 
 ## Examples
 
-[`examples/department`](examples/department) is a whole project written from nothing: ten worlds in which a mathematics department plans its teaching, merges two timetables, judges them from a world that holds them, and lets a year pass.
+[`examples/department`](examples/department) is a whole project written from nothing: eleven worlds in which a mathematics department plans its teaching, merges two timetables, judges them from a world that holds them, and lets a year pass.
 
 ```sh
 cd examples/department

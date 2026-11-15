@@ -1,0 +1,21 @@
+from vocabulary
+
+kind name [
+  person:  person
+]
+kind person [
+  + name:  one name
+]
+
+name Emmy
+name Augustin
+name Bernhard
+name Kurt
+name Ada
+name Blake
+name Claire
+name Devon
+name Ellie
+name Felix
+
+rule bearer: name n person person p if p name n

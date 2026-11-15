@@ -8,7 +8,7 @@ The worlds here carry no comments: each is explained below. Run one with `grant 
 | [`towns/`](#towns) | a parent, two children that disagree, and their merge |
 | [`compare.grant`](#comparegrant) | worlds held as objects and compared |
 | [`calendar.grant`](#calendargrant) | dates built on `numbers` |
-| [`department/`](department) | a whole project in ten worlds, with its own README |
+| [`department/`](department) | a whole project in eleven worlds, with its own README |
 
 ## `harbor.grant`
 

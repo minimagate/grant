@@ -1,7 +1,7 @@
-# A department, in ten worlds
+# A department, in eleven worlds
 
 A mathematics department plans its teaching. The project is written from nothing: it starts
-with the words, adds courses, people and rooms in separate worlds, joins them, proposes two
+with the words, adds names, courses, people and rooms in separate worlds, joins them, proposes two
 timetables, merges them, judges the results from a world that holds them, and then lets a
 year pass.
 
@@ -9,6 +9,7 @@ year pass.
                  vocabulary                    kinds and their shapes; no things yet
                  /    |    \
         catalogue     |     campus             courses and prerequisites · rooms and hours
+            |       names     |                names, and who bears each
             |   \     |       |
             |    people       |                lecturers and students
              \      |        /
@@ -39,6 +40,12 @@ Only declares. It builds on `numbers` and `text` and states the kinds everything
 
 A course has `requires`, which is stated, and `needs`, which is derived. Both are declared here, because stated and derived facts share a shape.
 
+### `names`
+
+Built on `vocabulary`. A name is a thing, not a text: the kind `name`, ten names, and a new relation on people, `name: one name`. A person has one name, and a name can belong to several people.
+
+A fact is stated from one end. `rule bearer` gives the other: if a person's name is n, then n's `person` is that person. So `noether.name` is Emmy and `Emmy.person` is everyone called Emmy.
+
 ### `catalogue`
 
 Four areas and eight courses, each with a title, credits, an area and what it requires.
@@ -58,7 +65,12 @@ Three rooms with their seats and eight slots, each with a day (1 is Monday) and 
 
 ### `people`
 
-Built on `vocabulary` and `catalogue`. Four lecturers with the areas they can teach, and five students with what they have passed and what they want. Every object is written with one relation per line.
+Built on `names` and `catalogue`. Four lecturers with the areas they can teach, and five students with what they have passed and what they want. Every object is written with one relation per line.
+
+| Question | Shows |
+| --- | --- |
+| `? noether.name` | Emmy |
+| `? Emmy.person` | noether: nobody stated it; `bearer` derives it |
 
 ### `department`
 
