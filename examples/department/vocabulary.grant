@@ -31,3 +31,15 @@ role student
 role afternoon
 
 rule afternoon: slot s is afternoon if s.hour >= 14
+
+kind area [
+  + course:  course
+]
+kind role [
+  + person:  person
+  + slot:    slot
+]
+
+rule offers:   area a course course c if c area a
+rule holders:  role r person person p if p is r
+rule marks:    role r slot slot s if s is r

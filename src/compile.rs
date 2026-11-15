@@ -114,11 +114,15 @@ impl<'w> Compiler<'w> {
 
     /// Four names in a row: the reading that starts with a kind, if the first name is one.
     fn meant<'c>(&self, name: &str, as_kind: &'c Cond, as_term: &'c Cond) -> &'c Cond {
-        let is_kind = match self.inside.last() {
+        if self.is_kind(name) { as_kind } else { as_term }
+    }
+
+    /// Whether a name is a kind where the line runs.
+    fn is_kind(&self, name: &str) -> bool {
+        match self.inside.last() {
             None => self.world.kinds.contains_key(name),
             Some((worlds, _)) => worlds.iter().any(|w| w.kinds.contains_key(name)),
-        };
-        if is_kind { as_kind } else { as_term }
+        }
     }
 
     /// Declares every variable this condition introduces in the current scope. Scopes inside it
@@ -216,6 +220,9 @@ impl<'w> Compiler<'w> {
                 }
             },
             Expr::The(the) => {
+                if let Some(kind) = the.kind.as_ref().filter(|k| !self.is_kind(k)) {
+                    return Err(format!("kind `{kind}` doesn't exist yet"));
+                }
                 let named = self.objects.len();
                 let mut desc = Vec::new();
                 let mut slots = Vec::new();

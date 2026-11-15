@@ -38,13 +38,17 @@ The files carry no comments; this is what each one does.
 
 Only declares. It builds on `numbers` and `text` and states the kinds everything else shares: `area`, `role`, `room`, `slot`, `course` and `person`, each with its shape. Nothing exists yet except three roles, `lecturer`, `student` and `afternoon`, which are flags: values a relation can hold. One rule marks a slot as afternoon when its hour is 14 or later.
 
+What things share is a thing, and a fact is stated from one end. So every shared thing gets its other end by a rule: `offers` gives an area its courses, and `holders` and `marks` give a role its people and slots. `area@algebra.course` is every algebra course, and `role@lecturer.person` every lecturer.
+
 A course has `requires`, which is stated, and `needs`, which is derived. Both are declared here, because stated and derived facts share a shape.
 
 ### `names`
 
-Built on `vocabulary`. A name is a thing, not a text: the kind `name`, ten names, and a new relation on people, `name: one name`. A person has one name, and a name can belong to several people.
+Built on `vocabulary`. A name is a thing, not a text: the kind `name`, ten names written in small letters, and a new relation on people, `name: one name`. A person has one name, and a name can belong to several people.
 
-A fact is stated from one end. `rule bearer` gives the other: if a person's name is n, then n's `person` is that person. So `noether.name` is Emmy and `Emmy.person` is everyone called Emmy.
+`rule bearer` gives the other end: if a person's name is n, then n's `person` is that person. So `noether.name` is emmy, and `name@emmy.person` is everyone called emmy: `@` goes from the kind to the name, `.` from the name along `person`.
+
+Five students share a handle with their name: there is a person ada and a name ada. The kind tells them apart, so people write `name: name@ada`, `next_year` writes `- person@claire`, and Grant shows the student as `person@ada`.
 
 ### `catalogue`
 
@@ -58,6 +62,7 @@ Four areas and eight courses, each with a title, credits, an area and what it re
 | `? differential_geometry.needs` | linear_algebra, analysis_1, analysis_2, topology |
 | `? course c and not c requires course p` | linear_algebra, analysis_1, logic_1: where a first-year student can start |
 | `? sum galois_theory.needs.credits` | 15: the credits to earn before Galois Theory |
+| `? area@algebra.course` | linear_algebra, group_theory, galois_theory: `offers` derives it |
 
 ### `campus`
 
@@ -69,8 +74,9 @@ Built on `names` and `catalogue`. Four lecturers with the areas they can teach, 
 
 | Question | Shows |
 | --- | --- |
-| `? noether.name` | Emmy |
-| `? Emmy.person` | noether: nobody stated it; `bearer` derives it |
+| `? noether.name` | emmy |
+| `? name@emmy.person` | noether: nobody stated it; `bearer` derives it |
+| `? role@lecturer.person` | noether, cauchy, riemann, godel |
 
 ### `department`
 

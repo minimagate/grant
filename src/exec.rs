@@ -323,10 +323,13 @@ impl Session {
     fn remove(&mut self, subj: &Expr, rel: Option<Sym>, value: Option<&Expr>, said: &mut Vec<String>) -> Res<()> {
         // Removing what isn't there does nothing.
         for e in [Some(subj), value].into_iter().flatten() {
-            if let Expr::Name(name) = e
-                && self.world.find(name).is_empty()
-            {
-                said.push(format!("nothing removed: `{name}` isn't here"));
+            let (kind, name) = match e {
+                Expr::Name(name) => (None, name),
+                Expr::The(the) if the.desc.is_empty() => (the.kind.as_ref(), &the.handle),
+                _ => continue,
+            };
+            if !self.world.find(name).iter().any(|id| kind.is_none_or(|k| self.world.objects[id].kind == *k)) {
+                said.push(format!("nothing removed: `{}` isn't here", kind.map_or(name.to_string(), |k| format!("{k}@{name}"))));
                 return Ok(());
             }
         }

@@ -7,7 +7,7 @@ if exists("b:current_syntax")
   finish
 endif
 
-syn match   grantDelimiter "[][()|:,.]"
+syn match   grantDelimiter "[][()|:,.@]"
 syn match   grantOperator  "[-+*/=<>]\|!=\|<=\|>="
 syn keyword grantStatement from kind rule never each
 syn keyword grantLogic     if where and or not in the
@@ -81,6 +81,11 @@ function! s:Learn() abort
   call s:Colour('grantObjectName', l:found.objects)
   call s:Colour('grantRelationName', l:found.relations)
   call s:Colour('grantKindName', l:found.kinds)
+  " Where a name stands settles what it is: a kind before `@`, an object after it, and a
+  " relation after `.`, whatever else shares the name.
+  syn match grantKindName     "\<\h\w*\ze@"
+  syn match grantObjectName   "@\@1<=\h\w*"
+  syn match grantRelationName "\.\@1<=\h\w*"
   " A rule's name is its own, even when an object shares it.
   silent! syn clear grantRuleName
   syn match grantRuleName "\%(^\s*\%(-\s*\)\?\%(rule\|never\)\s\+\)\@<=\h\w*"

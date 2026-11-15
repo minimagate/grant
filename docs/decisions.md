@@ -86,11 +86,21 @@ A decision marked **(extension)** adds something the grammar doesn't list.
 
 ## Showing
 
-34. **Things of one kind are shown in index order**; mixed kinds in order of creation. When several objects share a handle they are shown with kind and index, `harbor (person 4)`, and with the world that made them when the index repeats after a merge, `robin (person 2 from move_bath)`.
+34. **Things of one kind are shown in index order**; mixed kinds in order of creation. When several objects share a handle they are shown as `person@harbor` if the kind tells them apart, and otherwise with kind and index, `harbor (person 4)`, and with the world that made them when the index repeats after a merge, `robin (person 2 from move_bath)`.
 
 35. **A line may nest 120 levels deep** (parentheses, `not`, `count ( … )`). Deeper is refused: "this line nests too deeply".
 
 36. **Inside brackets, a line ending in `,`, `:` or an operator continues** on the next line instead of ending the entry.
+
+## Pointing
+
+37. **`kind@handle` is `the kind handle [ ]`**, written short. It works wherever a handle does: as a value, as the subject of a line, in a pattern and inside `in w:`. Removing `person@zed` when there is none removes nothing, as `- zed` does. A name before `@` that is no kind is "kind `x` doesn't exist yet".
+
+38. **A line's subject is one thing**: a handle, `kind@handle` or `the …`, never a relation followed. Dots are for values.
+
+39. **Grant has no reverse dot.** The other end of a relation is a relation of its own, given by a rule: `rule bearer: name n person person p if p name n`. Every shared thing in the examples (names, areas, roles) gets its other end this way.
+
+40. **Names are written in small letters.** It is a convention, not a rule the interpreter checks; capitals belong inside text.
 
 ## Not built
 

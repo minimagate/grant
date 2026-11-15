@@ -293,10 +293,11 @@ impl Parser<'_> {
         Ok(Stmt::Each { kind, var, cond, action })
     }
 
-    /// A handle, or `the` with a description.
+    /// A handle, `kind@handle`, or `the` with a description.
     fn reference(&mut self) -> Res<Expr> {
         if !self.eat("the") {
-            return Ok(Expr::Name(self.name("a name")?));
+            let name = self.name("a name")?;
+            return self.at_kind(name);
         }
         let first = self.name("a handle")?;
         let (kind, handle) = match self.name_at(0) {
@@ -318,6 +319,15 @@ impl Parser<'_> {
             desc.push((assign.rel, assign.values));
         }
         Ok(Expr::The(Box::new(The { kind, handle, desc })))
+    }
+
+    /// `person@harbor`: the object of that kind with that handle, as `the person harbor [ ]`.
+    fn at_kind(&mut self, name: Sym) -> Res<Expr> {
+        if !self.eat("@") {
+            return Ok(Expr::Name(name));
+        }
+        let handle = self.name("a handle after `@`")?;
+        Ok(Expr::The(Box::new(The { kind: Some(name), handle, desc: Vec::new() })))
     }
 
     /// Runs a parser one level deeper.
@@ -394,7 +404,7 @@ impl Parser<'_> {
         let after = self.at(n);
         // Does the last name carry on as a value, or does a new value start after it?
         let carries_on = match after {
-            Some(Tok::Sign("." | "+" | "-" | "*" | "/" | "div" | "mod")) => true,
+            Some(Tok::Sign("." | "@" | "+" | "-" | "*" | "/" | "div" | "mod")) => true,
             Some(Tok::TightMinus) => n >= 4,
             _ => false,
         };
@@ -492,7 +502,7 @@ impl Parser<'_> {
         match token {
             Tok::Num(n) => Ok(Expr::Num(n)),
             Tok::Text(t) => Ok(Expr::Text(t)),
-            Tok::Name(name) => Ok(Expr::Name(name)),
+            Tok::Name(name) => self.at_kind(name),
             Tok::Sign("(") => {
                 let inner = self.expr()?;
                 self.expect(")")?;

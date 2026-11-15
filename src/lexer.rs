@@ -12,7 +12,7 @@ const KEYWORDS: [&str; 19] = [
 ];
 
 /// Punctuation, with the two-character marks first.
-const MARKS: [&str; 19] = ["!=", "<=", ">=", "[", "]", "(", ")", "|", ":", ".", ",", "?", "+", "-", "*", "/", "=", "<", ">"];
+const MARKS: [&str; 20] = ["!=", "<=", ">=", "[", "]", "(", ")", "|", ":", ".", "@", ",", "?", "+", "-", "*", "/", "=", "<", ">"];
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum Tok {

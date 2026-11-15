@@ -12,15 +12,27 @@ pub fn source(world: &World) -> String {
     if !primitives.is_empty() {
         lines.push(format!("from {}\n", primitives.join(", ")));
     }
-    if world.objects.values().any(|o| world.find(&o.handle).len() > 1) {
-        lines.push("-- some handles are shared by several objects, so this listing can't be run as it is\n".into());
+    // Objects of different kinds sharing a handle are written `kind@handle`; only objects of one
+    // kind sharing it can't be told apart in a listing.
+    let shared = |o: &crate::world::Object| world.find(&o.handle).iter().filter(|id| world.objects[id].kind == o.kind).count() > 1;
+    if world.objects.values().any(shared) {
+        lines.push("-- some handles are shared by several objects of one kind, so this listing can't be run as it is\n".into());
     }
 
+    // A kind is declared before anything mentions it: one that an earlier kind's shape names is
+    // declared bare first, and its own shape is added where it comes.
+    let kinds: Vec<(&Sym, _)> = world.kinds.iter().filter(|(name, _)| !is_primitive(name) && &***name != "world").collect();
+    let mut early = BTreeSet::new();
+    for (i, (name, shape)) in kinds.iter().enumerate() {
+        let later = |k: &Sym| k != *name && kinds[i + 1..].iter().any(|(other, _)| *other == k);
+        early.extend(shape.values().map(|field| &field.kind).filter(|k| later(k)));
+    }
+    lines.extend(early.iter().map(|name| format!("kind {name}")));
     for (name, shape) in world.kinds.iter().filter(|(name, _)| !is_primitive(name)) {
-        let plus = if &**name == "world" { "+ " } else { "" };
+        let plus = if &**name == "world" || early.contains(name) { "+ " } else { "" };
         let fields: Vec<String> = shape.iter().map(|(rel, field)| format!("{plus}{rel}: {field}")).collect();
         match fields.as_slice() {
-            [] if &**name == "world" => {}
+            [] if &**name == "world" || early.contains(name) => {}
             [] => lines.push(format!("kind {name}")),
             [field] => lines.push(format!("kind {name} [ {field} ]")),
             _ => lines.push(format!("kind {name} [\n  {}\n]", fields.join("\n  "))),
@@ -38,7 +50,9 @@ pub fn source(world: &World) -> String {
         let mut values: BTreeMap<&Sym, Vec<String>> = BTreeMap::new();
         for (rel, value) in facts.remove(id).unwrap_or_default() {
             match value {
-                Value::Obj(other) if !stated.contains(other) => later.push(format!("{} {rel} {}", object.handle, world.show(value))),
+                Value::Obj(other) if !stated.contains(other) => {
+                    later.push(format!("{} {rel} {}", world.show(&Value::Obj(*id)), world.show(value)))
+                }
                 _ => values.entry(rel).or_default().push(world.show(value)),
             }
         }

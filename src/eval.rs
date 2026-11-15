@@ -227,7 +227,10 @@ impl Eval<'_> {
             CExpr::Handle(handle) => match view.world.find(handle).as_slice() {
                 [] => Vec::new(),
                 [id] => vec![Value::Obj(*id)],
-                several => return Err(format!("{} objects called {handle} in {}; use `the`", several.len(), view.world.name)),
+                several => {
+                    let hint = view.world.tell_apart(handle, several);
+                    return Err(format!("{} objects called {handle} in {}; {hint}", several.len(), view.world.name));
+                }
             },
             CExpr::The(the) => vec![Value::Obj(self.the(the, env, view)?)],
             CExpr::Index(index) => view.numbered(*index),

@@ -26,6 +26,16 @@ fn shows(source: &str) -> Vec<String> {
     run(&[("w", source)]).unwrap_or_else(|e| panic!("{e}"))
 }
 
+/// Writes one world to a fresh folder and returns its path.
+fn write_world(source: &str) -> PathBuf {
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let dir = std::env::temp_dir().join(format!("grant-world-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+    std::fs::create_dir_all(&dir).unwrap();
+    let source: Vec<&str> = source.lines().map(str::trim_start).collect();
+    std::fs::write(dir.join("w.grant"), source.join("\n")).unwrap();
+    dir.join("w.grant")
+}
+
 /// The message of the error a single world fails with.
 fn fails(source: &str) -> String {
     let error = run(&[("w", source)]).expect_err("this world should fail");
@@ -88,7 +98,53 @@ fn the_examples_run() {
     let review = example("department/review.grant");
     assert_eq!(review[2], "plan_merged");
     assert_eq!(review[5..], ["yes", "no", "yes"]);
-    assert_eq!(example("department/next_year.grant")[..2], ["logic_1", "s: felix, c: group_theory"]);
+    assert_eq!(example("department/next_year.grant")[..2], ["logic_1", "s: person@felix, c: group_theory"]);
+}
+
+#[test]
+fn a_kind_and_a_handle_point_at_one_object() {
+    let two = town("person york [ age: 50 | lives_in: city@york ]\n");
+    assert_eq!(
+        shows(&format!(
+            "{two}person@york knows liz
+             + person@liz knows person@york
+             ? person@york.lives_in
+             ? person p lives_in city@york
+             ? person p knows person@york
+             - person@zed"
+        )),
+        ["city@york", "liz, harbor, person@york", "liz", "nothing removed: `person@zed` isn't here"]
+    );
+    // In brackets, `each`, rules, constraints and patterns of three and four names.
+    assert_eq!(
+        shows(&format!(
+            "{two}person@york [ knows: + person@liz ]
+             each person p where p lives_in city@york [ age: p.age + 1 ]
+             rule local: person p is adult if p lives_in city@york
+             never far: person p where p knows person@york and not p is adult
+             ? liz knows person@york
+             ? person p knows person@liz
+             ? person@york.age
+             ? count (person p is adult)"
+        )),
+        ["no", "harbor, person@york", "51", "3"]
+    );
+    // Inside a held world, and named again in a listing that runs as it is.
+    let held =
+        run(&[("town", &two), ("w", "from numbers\nworld town\n? in town: person@york.lives_in\n? in town: person p lives_in city@york")]);
+    assert_eq!(held.unwrap(), ["city@york", "liz, harbor, person@york"]);
+    let path = write_world(&format!("{two}person@york knows harbor"));
+    let world = Loader::new().run(&path, &mut Vec::new()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    let listing = grant::show::source(&world);
+    assert!(!listing.contains("can't be run"), "{listing}");
+    assert!(listing.contains("person york [ age: 50 | knows: harbor | lives_in: city@york ]"), "{listing}");
+    assert_eq!(shows(&format!("{listing}? person@york.knows")), ["harbor"]);
+    assert_eq!(fails(&format!("{two}? the mood york [ ]")), "kind `mood` doesn't exist yet");
+    assert_eq!(fails(&format!("{two}? york")), "2 objects called york; write `city@york` or `person@york`");
+    assert_eq!(fails(&format!("{two}? mood@york")), "kind `mood` doesn't exist yet");
+    assert_eq!(fails(&format!("{two}? person@zed")), "no people match this description");
+    assert_eq!(fails(&format!("{two}? city@")), "expected a handle after `@` but found the end of the line");
 }
 
 #[test]
@@ -365,7 +421,7 @@ fn errors_on_a_line() {
     );
     assert_eq!(fails(&town("from numbers")), "`from` comes first, and lists every parent on one line");
     assert_eq!(fails("from town_x"), "no world called `town_x` here");
-    assert_eq!(fails(&town("person york [ age: 1 | lives_in: york ]")), "2 objects called york; use `the`");
+    assert_eq!(fails(&town("person york [ age: 1 | lives_in: york ]")), "2 objects called york; write `city@york` or `person@york`");
     assert_eq!(fails(&town("harbor knows liz laurie")), "`laurie` doesn't belong here");
     assert_eq!(fails(&town("person x [ age: 1")), "a bracket opened here is never closed");
 }

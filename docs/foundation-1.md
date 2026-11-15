@@ -223,11 +223,24 @@ harbor knows laurie
 - **A fact is** `subject relation value`. Relations are one word, with `_` between parts: `lives_in`, `is_friends_with`.
 - **Things must exist before they are mentioned.** `harbor lives_in york` is an error if `york` doesn't exist yet.
 - **Comments** start with `--` and run to the end of the line.
-- **What things share is a thing, not a text.** A name is an object: `name Emmy`, then `noether [ name: Emmy ]`. One person has one name and a name can have many people. A fact is stated from one end; a rule gives the other: `rule bearer: name n person person p if p name n` makes `Emmy.person` everyone called Emmy.
+- **Names are written in small letters**, with `_` between words: `lives_in`, `linear_algebra`, `emmy`. Capitals belong inside text: `"Linear Algebra"`.
+- **What things share is a thing, not a text.** A name is an object: `name emmy`, then `noether [ name: name@emmy ]`. One person has one name and a name can have many people. A fact is stated from one end; a rule gives the other: `rule bearer: name n person person p if p name n` makes `name@emmy.person` everyone called emmy.
 
 ### Pointing at things
 
-A bare handle works when exactly one object has it. When several do, describe the one you mean with `the`:
+A bare handle works when exactly one object has it. When objects of different kinds share it, write the kind, then `@`, then the handle:
+
+```
+city york
+person york [ lives_in: city@york ]
+
+person@york knows liz
+? person@york.lives_in          -- city@york
+```
+
+`@` goes from a kind to one of its objects; `.` goes from an object along a relation. So `name@emmy.person` is the name emmy, then everyone who bears it. `person@york` is exactly `the person york [ ]`.
+
+When objects of the same kind share a handle, describe the one you mean with `the`:
 
 ```
 person harbor [ lives_in: york ]
@@ -239,11 +252,13 @@ the person harbor [ lives_in: york ] feels happy
 
 `the` means exactly one thing fits. If none or several fit, Grant stops and says so. After `the`, brackets describe which thing you mean; they don't change it.
 
+Grant shows a shared handle the same way: `person@york` when the kind tells it apart, and `harbor (person 4)`, with its index, when it doesn't.
+
 ---
 
 ## 7. Values and expressions
 
-**Spaces state, dots refer, `?` shows.** `harbor knows liz` adds a fact. `harbor.knows` *is* liz and laurie, wherever it is written. `? harbor.knows` prints them.
+**Spaces state, dots refer, `@` picks, `?` shows.** `harbor knows liz` adds a fact. `harbor.knows` *is* liz and laurie, wherever it is written. `? harbor.knows` prints them.
 
 ### Dots
 
@@ -651,7 +666,8 @@ harbor [ lives_in: bath | age: harbor.age + 1 ]
 | A parent has errors | `town` has errors; fix it first |
 | A name is used before it is created | `york` doesn't exist yet |
 | A name pointed at something a parent removed | harbor doesn't exist (removed in town) |
-| A bare handle fits several objects | 2 objects called harbor; use `the` |
+| A bare handle fits objects of several kinds | 2 objects called york; write `city@york` or `person@york` |
+| A bare handle fits several objects of one kind | 2 objects called harbor; use `the` |
 | `the` fits none or several | no / 2 people match this description |
 | A relation isn't in the kind's shape | person has no relation `favourite_colour` |
 | A value is the wrong kind | `lives_in` takes a city, not a feeling |
@@ -673,7 +689,7 @@ Not an error, but reported: removing a stated fact that a rule still produces ("
 
 ## 16. Grammar summary
 
-An informal summary. Lowercase words are names; what a name means (kind, handle, relation, variable, world name) comes from where it stands and what has been declared.
+An informal summary. Lowercase words are names, and names are written in small letters; what a name means (kind, handle, relation, variable, world name) comes from where it stands and what has been declared.
 
 ```
 world      = [ "from" world_name { "," world_name } ] { statement }
@@ -701,7 +717,7 @@ change     = ( "+" | "-" ) expr
 rule       = "rule" name ":" kind var relation term "if" condition
 never      = "never" name ":" kind var "where" condition
 
-ref        = handle | "the" [ kind ] handle values
+ref        = handle | kind "@" handle | "the" [ kind ] handle values
 condition  = item { ( "and" | "or" ) item }
 item       = "not" item | "(" condition ")" | "in" world_name ":" condition
            | kind var                          -- any object of a kind
@@ -734,6 +750,7 @@ sep        = "|" | newline
 | What identifies a kind, relation, rule or constraint? | Its name. |
 | Does equality compare names? | No. Equality compares shape. |
 | Is the index per kind or per world? | Per kind, and it can repeat after a merge. It numbers; it never identifies. |
+| How is one of several objects sharing a handle named? | By its kind, `person@york`, when the kinds differ; with `the` and a description when they don't. |
 
 ## 18. Beyond the foundation
 

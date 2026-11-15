@@ -58,3 +58,4 @@ never circular: course c where c needs c
 ? differential_geometry.needs
 ? course c and not c requires course p
 ? sum galois_theory.needs.credits
+? area@algebra.course

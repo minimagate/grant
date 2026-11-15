@@ -3,14 +3,14 @@ from plan_merged
 each person s where s is student [ passed: + s.may_take ]
 - each person s where (s is student) wants
 
-- claire
-- ellie
+- person@claire
+- person@ellie
 - godel
-person felix [ name: Felix | is: student | wants: linear_algebra, logic_1, group_theory ]
+person felix [ name: name@felix | is: student | wants: linear_algebra, logic_1, group_theory ]
 
-ada   [ wants: analysis_2, group_theory, topology ]
-blake [ wants: galois_theory, differential_geometry ]
-devon [ wants: galois_theory, analysis_2 ]
+person@ada   [ wants: analysis_2, group_theory, topology ]
+person@blake [ wants: galois_theory, differential_geometry ]
+person@devon [ wants: galois_theory, analysis_2 ]
 
 ? course c and c.demand > 0 and not c taught_by person t
 logic_1 [ taught_by: noether ]

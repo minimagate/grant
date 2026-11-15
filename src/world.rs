@@ -291,8 +291,18 @@ impl World {
                 Some(world) => format!("{handle} doesn't exist (removed in {world})"),
                 None => format!("`{handle}` doesn't exist yet"),
             }),
-            several => Err(format!("{} objects called {handle}; use `the`", several.len())),
+            several => Err(format!("{} objects called {handle}; {}", several.len(), self.tell_apart(handle, several))),
         }
+    }
+
+    /// How to point at one of several objects sharing a handle: by kind if the kinds differ.
+    pub fn tell_apart(&self, handle: &str, ids: &[ObjId]) -> String {
+        let kinds: BTreeSet<&Sym> = ids.iter().map(|id| &self.objects[id].kind).collect();
+        if kinds.len() < ids.len() {
+            return "use `the`".into();
+        }
+        let ways: Vec<String> = kinds.iter().map(|kind| format!("`{kind}@{handle}`")).collect();
+        format!("write {}", ways.join(" or "))
     }
 
     pub fn of_kind(&self, kind: &str) -> impl Iterator<Item = ObjId> {
@@ -416,8 +426,12 @@ impl World {
             Value::Text(t) => format!("{t:?}"),
             Value::Obj(id) => match self.locate(*id) {
                 Some((world, object)) if world.find(&object.handle).len() > 1 => {
+                    let same_kind = |o: &ObjId| world.objects[o].kind == object.kind;
+                    if world.find(&object.handle).iter().filter(|o| same_kind(o)).count() == 1 {
+                        return format!("{}@{}", object.kind, object.handle);
+                    }
                     // Indexes can repeat after a merge; then the world that made it tells them apart.
-                    let twin = |o: &ObjId| world.objects[o].kind == object.kind && world.objects[o].index == object.index;
+                    let twin = |o: &ObjId| same_kind(o) && world.objects[o].index == object.index;
                     let twins = world.find(&object.handle).into_iter().filter(twin).count();
                     let origin = if twins > 1 { format!(" from {}", object.made_in) } else { String::new() };
                     format!("{} ({} {}{origin})", object.handle, object.kind, object.index)
