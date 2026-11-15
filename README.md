@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="logo/grant-mark.svg" alt="Grant" width="120">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logo/grant-mark-white.svg">
+    <img src="logo/grant-mark.svg" alt="Grant" width="120">
+  </picture>
 </p>
 
 <h1 align="center">Grant</h1>
