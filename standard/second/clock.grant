@@ -1,0 +1,36 @@
+from numbers
+
+kind day_part
+day_part am
+day_part pm
+day_part night
+day_part morning
+day_part afternoon
+day_part evening
+
+kind time [
+  since_midnight:  one number
+  hour:            one number
+  minute:          one number
+  hour_12:         one number
+  is:              day_part
+]
+kind day_part [
+  time:  time by is
+]
+
+rule time_hour:           time t hour t.since_midnight div 60
+rule time_minute:         time t minute t.since_midnight mod 60
+rule time_since_midnight: time t since_midnight t.hour * 60 + t.minute if
+  t.hour >= 0 and t.hour <= 23 and t.hour mod 1 = 0 and t.minute >= 0 and t.minute <= 59 and t.minute mod 1 = 0
+rule time_hour_12:        time t hour_12 (t.hour + 11) mod 12 + 1
+
+rule time_am:        time t is am if t.hour < 12
+rule time_pm:        time t is pm if t.hour >= 12
+rule time_night:     time t is night if t.hour < 6
+rule time_morning:   time t is morning if t.hour >= 6 and t.hour < 12
+rule time_afternoon: time t is afternoon if t.hour >= 12 and t.hour < 18
+rule time_evening:   time t is evening if t.hour >= 18
+
+never time_within_a_day: time t where t.hour < 0 or t.hour > 23 or t.minute < 0 or t.minute > 59
+never time_whole_minute: time t where t.since_midnight mod 1 != 0

@@ -1,0 +1,37 @@
+from ../second/calendar, ../second/clock, ../second/durations
+
+kind event [
+  on:        one date
+  starts:    one time
+  lasts:     one duration
+  begins:    one number
+  finishes:  one number
+  overlaps:  event
+]
+kind date [
+  event:  event by on
+]
+
+rule event_begins:   event e begins e.on.days * 1440 + e.starts.since_midnight
+rule event_finishes: event e finishes e.begins + e.lasts.in_minutes
+rule event_overlaps: event a overlaps event b if a != b and a.begins < b.finishes and b.begins < a.finishes
+
+kind routine [
+  every:          some weekday
+  starts:         one time
+  lasts:          one duration
+  falls_on:       date
+  collides_with:  event
+]
+kind weekday [
+  routine:  routine by every
+]
+kind date [
+  routine:  routine by falls_on
+]
+
+rule routine_falls_on: routine r falls_on date d if d.falls_on = r.every
+rule routine_collides: routine r collides_with event e if
+  r falls_on e.on
+  and e.starts.since_midnight < r.starts.since_midnight + r.lasts.in_minutes
+  and r.starts.since_midnight < e.starts.since_midnight + e.lasts.in_minutes

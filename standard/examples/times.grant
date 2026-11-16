@@ -1,0 +1,21 @@
+from ../second/clock, ../second/durations
+
+time opening [ hour: 9 | minute: 30 ]
+duration shift [ hours: 7 | minutes: 45 ]
+time closing [ since_midnight: opening.since_midnight + shift.in_minutes ]
+
+? opening.since_midnight
+? opening.is
+? closing.hour
+? closing.minute
+? closing.hour_12
+? closing.is
+? shift.in_hours
+? shift.in_seconds
+? pm.time
+
+duration voyage [ days: 2 | hours: 30 | seconds: 90 ]
+? voyage.whole_days
+? voyage.and_hours
+? voyage.and_minutes
+? voyage.and_seconds

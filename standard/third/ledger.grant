@@ -1,0 +1,29 @@
+from ../second/calendar, ../second/money
+
+kind account [
+  currency:  one currency
+  balance:   one number
+]
+kind transfer [
+  on:       one date
+  amount:   one number
+  paid_by:  one account
+  paid_to:  one account
+]
+kind account [
+  incoming:  transfer by paid_to
+  outgoing:  transfer by paid_by
+]
+kind currency [
+  account:  account by currency
+]
+kind date [
+  transfer:  transfer by on
+]
+
+rule account_balance: account a balance sum a.incoming.amount - sum a.outgoing.amount
+
+never transfer_positive:          transfer t where t.amount <= 0
+never transfer_between_two:       transfer t where t.paid_by = t.paid_to
+never transfer_one_currency:      transfer t where t.paid_by.currency != t.paid_to.currency
+never transfer_finer_than_minor:  transfer t where t.amount * t.paid_to.currency.minor mod 1 != 0

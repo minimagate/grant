@@ -118,6 +118,157 @@ fn the_examples_run() {
     assert_eq!(example("department/next_year.grant")[..2], ["logic_1", "s: felix, c: group_theory"]);
 }
 
+/// A world written next to the standard ones, which it reaches by path.
+fn standard(source: &str) -> Result<Vec<String>, String> {
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("target").join(format!("standard-test-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+    std::fs::create_dir_all(&dir).unwrap();
+    let source: Vec<&str> = source.lines().map(str::trim_start).collect();
+    std::fs::write(dir.join("w.grant"), source.join("\n").replace("from ", "from ../../standard/")).unwrap();
+    let mut shown = Vec::new();
+    let result = Loader::new().run(&dir.join("w.grant"), &mut shown);
+    std::fs::remove_dir_all(&dir).ok();
+    result.map(|_| shown.into_iter().map(|o| o.text).collect()).map_err(|e| e.to_string())
+}
+
+#[test]
+fn the_standard_worlds_run() {
+    let example = |name: &str| {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("standard/examples").join(format!("{name}.grant"));
+        let mut shown = Vec::new();
+        Loader::new().run(&path, &mut shown).unwrap_or_else(|e| panic!("{e}"));
+        shown.into_iter().map(|o| o.text).collect::<Vec<_>>()
+    };
+    assert_eq!(
+        example("dates"),
+        [
+            "20773",
+            "monday",
+            "47",
+            "fourth_quarter",
+            "2026",
+            "12",
+            "31",
+            "thursday",
+            "december",
+            "45",
+            "leap_year",
+            "60",
+            "saturday, sunday",
+            "october, november, december",
+            "monday",
+            "launch"
+        ]
+    );
+    assert_eq!(example("times"), ["570", "am, morning", "17", "15", "5", "pm, afternoon", "7.75", "27900", "closing", "3", "6", "1", "30"]);
+    assert_eq!(
+        example("race"),
+        [
+            "3",
+            "gold, silver",
+            "blake",
+            "blake",
+            "42.194988",
+            "yes",
+            "38.5",
+            "2199.023255552",
+            "millimetre, centimetre, metre, kilometre, inch, foot, yard, mile, nautical_mile",
+            "\"mi\""
+        ]
+    );
+    assert_eq!(example("prices"), ["96", "56.25", "9000", "250", "2.5", "ticket", "\"JPY\""]);
+    assert_eq!(
+        example("week"),
+        [
+            "nothing",
+            "review",
+            "-420",
+            "monday_16, monday_28",
+            "review, workshop",
+            "standup, review, workshop, party",
+            "360",
+            "sent",
+            "christmas_26",
+            "christmas_26, monday_28",
+            "monday_16, tuesday_17",
+            "3"
+        ]
+    );
+    assert_eq!(example("books"), ["1149.5", "350.5", "-2400", "0", "salary, rent", "350.5", "current, landlord"]);
+    assert_eq!(example("everything"), ["53", "24", "7", "12"]);
+}
+
+#[test]
+fn a_date_is_stated_either_way_and_read_both() {
+    // Known days: the epoch and the day before it, a leap day, and the turns of ISO week years.
+    let shown = standard(
+        "from second/calendar
+        date epoch   [ days: 0 ]
+        date eve     [ year: 1969 | month: 12 | day: 31 ]
+        date leap    [ year: 2000 | month: 2 | day: 29 ]
+        date early   [ year: 2021 | month: 1 | day: 3 ]
+        date late    [ year: 2024 | month: 12 | day: 30 ]
+        date long    [ year: 2020 | month: 12 | day: 31 ]
+        date far     [ days: 47540 ]
+        ? epoch.year
+        ? epoch.falls_on
+        ? eve.days
+        ? leap.days
+        ? leap.day_of_year
+        ? early.week
+        ? late.week
+        ? long.week
+        ? far.year
+        ? far.month
+        ? far.day
+        ? far.in_a",
+    )
+    .unwrap();
+    assert_eq!(shown, ["1970", "thursday", "-1", "11016", "60", "53", "1", "53", "2100", "2", "28", "common_year"]);
+}
+
+#[test]
+fn the_standard_worlds_refuse_what_cannot_be() {
+    let ends = |source: &str| standard(source).expect_err("this world should fail at its end");
+    let february = ends("from second/calendar\ndate bad [ year: 2026 | month: 2 | day: 30 ]");
+    assert!(february.contains("bad breaks `date_on_the_calendar`"), "{february}");
+    let century = ends("from second/calendar\ndate bad [ year: 2100 | month: 2 | day: 29 ]");
+    assert!(century.contains("bad breaks `date_on_the_calendar`"), "{century}");
+    let hour = ends("from second/clock\ntime bad [ hour: 25 | minute: 0 ]");
+    assert!(hour.contains("bad breaks `time_within_a_day`"), "{hour}");
+    let unit = ends("from second/measures\nquantity q [ amount: 3 | unit: mile | as: kilogram ]");
+    assert!(unit.contains("q breaks `quantity_same_dimension`"), "{unit}");
+    let cent = ends("from second/money\nmoney m [ amount: 0.005 | currency: eur ]");
+    assert!(cent.contains("m breaks `money_finer_than_minor`"), "{cent}");
+    let circle = ends("from second/sequence\nplace a\nplace b\na [ next: b ]\nb [ next: a ]");
+    assert!(circle.contains("a breaks `place_circle`"), "{circle}");
+    let mixed = ends(
+        "from third/ledger
+        account a [ currency: eur ]
+        account b [ currency: usd ]
+        date d [ days: 3 ]
+        transfer t [ on: d | amount: 5 | paid_by: a | paid_to: b ]",
+    );
+    assert!(mixed.contains("t breaks `transfer_one_currency`"), "{mixed}");
+}
+
+#[test]
+fn a_child_changes_a_standard_world() {
+    // A week that rests on Friday and Saturday: the child states it, and what follows moves.
+    let shown = standard(
+        "from third/workweek
+        friday [ is: weekend ]
+        sunday [ is: workday ]
+        date a [ year: 2026 | month: 11 | day: 20 ]
+        date b [ year: 2026 | month: 11 | day: 22 ]
+        ? a.falls_on
+        ? working_day.date",
+    )
+    .unwrap();
+    assert_eq!(shown, ["friday", "b"]);
+}
+
 #[test]
 fn a_kind_and_a_handle_point_at_one_object() {
     let two = town("person york [ age: 50 | lives_in: city@york ]\n");

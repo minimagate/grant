@@ -1,0 +1,142 @@
+from numbers
+
+kind week_part
+week_part workday
+week_part weekend
+
+kind weekday [
+  number:    one number
+  is:        one week_part
+  next:      one weekday
+  previous:  one weekday by next
+]
+kind week_part [
+  weekday:  weekday by is
+]
+
+weekday monday    [ number: 1 | is: workday ]
+weekday tuesday   [ number: 2 | is: workday ]
+weekday wednesday [ number: 3 | is: workday ]
+weekday thursday  [ number: 4 | is: workday ]
+weekday friday    [ number: 5 | is: workday ]
+weekday saturday  [ number: 6 | is: weekend ]
+weekday sunday    [ number: 7 | is: weekend ]
+
+rule weekday_next: weekday a next weekday b if b.number = a.number mod 7 + 1
+
+kind quarter [
+  number:  one number
+]
+quarter first_quarter  [ number: 1 ]
+quarter second_quarter [ number: 2 ]
+quarter third_quarter  [ number: 3 ]
+quarter fourth_quarter [ number: 4 ]
+
+kind month [
+  number:    one number
+  days:      one number
+  quarter:   one quarter
+  next:      one month
+  previous:  one month by next
+]
+kind quarter [
+  month:  month by quarter
+]
+
+month january   [ number: 1  | days: 31 ]
+month february  [ number: 2  | days: 28 ]
+month march     [ number: 3  | days: 31 ]
+month april     [ number: 4  | days: 30 ]
+month may       [ number: 5  | days: 31 ]
+month june      [ number: 6  | days: 30 ]
+month july      [ number: 7  | days: 31 ]
+month august    [ number: 8  | days: 31 ]
+month september [ number: 9  | days: 30 ]
+month october   [ number: 10 | days: 31 ]
+month november  [ number: 11 | days: 30 ]
+month december  [ number: 12 | days: 31 ]
+
+rule month_next:    month a next month b if b.number = a.number mod 12 + 1
+rule month_quarter: month m quarter quarter q if q.number = (m.number + 2) div 3
+
+kind year_length
+year_length common_year
+year_length leap_year
+
+kind date [
+  days:             one number
+  year:             one number
+  month:            one number
+  day:              one number
+
+  falls_on:         one weekday
+  falls_in:         one month
+  quarter:          one quarter
+  in_a:             one year_length
+  year_days:        one number
+  month_days:       one number
+  day_of_year:      one number
+  week:             one number
+
+  era:              one number
+  day_of_era:       one number
+  year_of_era:      one number
+  day_from_march:   one number
+  month_from_march: one number
+  march_year:       one number
+  new_year:         one number
+  rough_week:       one number
+]
+kind weekday [
+  date:  date by falls_on
+]
+kind month [
+  date:  date by falls_in
+]
+kind quarter [
+  date:  date by quarter
+]
+kind year_length [
+  date:  date by in_a
+]
+
+rule date_era:              date d era (d.days + 719468) div 146097
+rule date_day_of_era:       date d day_of_era (d.days + 719468) mod 146097
+rule date_year_of_era:      date d year_of_era
+  (d.day_of_era - d.day_of_era div 1460 + d.day_of_era div 36524 - d.day_of_era div 146096) div 365
+rule date_day_from_march:   date d day_from_march
+  d.day_of_era - (365 * d.year_of_era + d.year_of_era div 4 - d.year_of_era div 100)
+rule date_month_from_march: date d month_from_march (5 * d.day_from_march + 2) div 153
+rule date_day:              date d day d.day_from_march - (153 * d.month_from_march + 2) div 5 + 1
+rule date_month:            date d month (d.month_from_march + 2) mod 12 + 1
+rule date_year:             date d year d.year_of_era + d.era * 400 + (13 - d.month) div 11
+
+rule date_march_year:       date d march_year d.year - (14 - d.month) div 12
+rule date_days:             date d days
+  365 * d.march_year + d.march_year div 4 - d.march_year div 100 + d.march_year div 400
+  + (153 * ((d.month + 9) mod 12) + 2) div 5 + d.day - 719469
+  if d.day >= 1 and d.day <= d.month_days and d.day mod 1 = 0 and d.year mod 1 = 0
+
+rule date_falls_on:    date d falls_on weekday w if w.number = (d.days + 3) mod 7 + 1
+rule date_falls_in:    date d falls_in month m if m.number = d.month
+rule date_quarter:     date d quarter d.falls_in.quarter
+rule date_new_year:    date d new_year
+  365 * (d.year - 1) + (d.year - 1) div 4 - (d.year - 1) div 100 + (d.year - 1) div 400 - 719162
+rule date_day_of_year: date d day_of_year d.days - d.new_year + 1
+rule date_year_days:   date d year_days
+  365 + d.year div 4 - (d.year - 1) div 4 - d.year div 100 + (d.year - 1) div 100 + d.year div 400 - (d.year - 1) div 400
+rule date_month_days:  date d month_days
+  d.falls_in.days + (d.year_days - 365) * ((14 - d.month) div 12) * (d.month div 2)
+rule date_common_year: date d in_a common_year if d.year_days = 365
+rule date_leap_year:   date d in_a leap_year if d.year_days = 366
+
+rule date_rough_week:  date d rough_week (d.day_of_year - d.falls_on.number + 10) div 7
+rule date_week:        date d week d.rough_week if d.rough_week >= 1 and d.rough_week <= 52
+rule date_week_before: date d week
+  (d.day_of_year + 365 + (d.year - 1) div 4 - (d.year - 2) div 4 - (d.year - 1) div 100 + (d.year - 2) div 100
+  + (d.year - 1) div 400 - (d.year - 2) div 400 - d.falls_on.number + 10) div 7 if d.rough_week = 0
+rule date_week_last:   date d week 53 if d.rough_week = 53 and d.year_days - d.day_of_year >= 4 - d.falls_on.number
+rule date_week_first:  date d week 1 if d.rough_week = 53 and d.year_days - d.day_of_year < 4 - d.falls_on.number
+
+never date_on_the_calendar: date d where d.month < 1 or d.month > 12 or d.day < 1 or d.day > d.month_days
+never date_whole_day:       date d where d.days mod 1 != 0

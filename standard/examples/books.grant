@@ -1,0 +1,21 @@
+from ../third/ledger
+
+date first_of_month [ year: 2026 | month: 12 | day: 1 ]
+date mid_month      [ year: 2026 | month: 12 | day: 15 ]
+
+account employer [ currency: eur ]
+account current  [ currency: eur ]
+account savings  [ currency: eur ]
+account landlord [ currency: eur ]
+
+transfer salary  [ on: first_of_month | amount: 2400    | paid_by: employer | paid_to: current ]
+transfer rent    [ on: first_of_month | amount: 900     | paid_by: current  | paid_to: landlord ]
+transfer aside   [ on: mid_month      | amount: 350.50  | paid_by: current  | paid_to: savings ]
+
+? current.balance
+? savings.balance
+? employer.balance
+? sum eur.account.balance
+? first_of_month.transfer
+? sum mid_month.transfer.amount
+? account a and a.balance > 500

@@ -108,6 +108,6 @@ A decision marked **(extension)** adds something the grammar doesn't list.
 
 ## Not built
 
-- **Standard worlds** (time, ordered collections) are section 18's "beyond the foundation". `examples/calendar.grant` shows one way.
+- **Standard worlds** (time, ordered collections) are section 18's "beyond the foundation". A first set is in [`standard`](../standard), written only with the primitives; nothing in the interpreter knows of them, and a world reaches them by path. A date there is read both ways by rules that feed each other, so the limit of decision 15, which counts every derived fact of the world, stops a world a little past 1,100 dates although its rules settle.
 - **Derivation is naive**: a recursive group of rules is re-run until nothing new follows. It is correct and simple, and slow for long chains over thousands of objects. Semi-naive evaluation is the next step if worlds grow.
 - **Comparing unrelated worlds** uses colour refinement and then backtracking. Highly symmetric worlds with thousands of objects can be slow to compare.

@@ -1,0 +1,34 @@
+from numbers
+
+kind duration [
+  weeks:        maybe number
+  days:         maybe number
+  hours:        maybe number
+  minutes:      maybe number
+  seconds:      maybe number
+
+  in_seconds:   one number
+  in_minutes:   one number
+  in_hours:     one number
+  in_days:      one number
+  in_weeks:     one number
+
+  whole_days:   one number
+  and_hours:    one number
+  and_minutes:  one number
+  and_seconds:  one number
+]
+
+rule duration_in_seconds: duration d in_seconds
+  sum d.weeks * 604800 + sum d.days * 86400 + sum d.hours * 3600 + sum d.minutes * 60 + sum d.seconds
+rule duration_in_minutes: duration d in_minutes d.in_seconds / 60
+rule duration_in_hours:   duration d in_hours d.in_seconds / 3600
+rule duration_in_days:    duration d in_days d.in_seconds / 86400
+rule duration_in_weeks:   duration d in_weeks d.in_seconds / 604800
+
+rule duration_whole_days:  duration d whole_days d.in_seconds div 86400
+rule duration_and_hours:   duration d and_hours d.in_seconds mod 86400 div 3600
+rule duration_and_minutes: duration d and_minutes d.in_seconds mod 3600 div 60
+rule duration_and_seconds: duration d and_seconds d.in_seconds mod 60
+
+never duration_backwards: duration d where d.in_seconds < 0

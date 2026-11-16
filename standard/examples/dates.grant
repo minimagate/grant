@@ -1,0 +1,22 @@
+from ../second/calendar
+
+date launch   [ year: 2026 | month: 11 | day: 16 ]
+date leap_day [ year: 2024 | month: 2 | day: 29 ]
+date deadline [ days: launch.days + 45 ]
+
+? launch.days
+? launch.falls_on
+? launch.week
+? launch.quarter
+? deadline.year
+? deadline.month
+? deadline.day
+? deadline.falls_on
+? deadline.falls_in
+? deadline.days - launch.days
+? leap_day.in_a
+? leap_day.day_of_year
+? weekend.weekday
+? fourth_quarter.month
+? friday.next.next.next
+? date d falls_on monday

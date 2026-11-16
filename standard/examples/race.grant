@@ -1,0 +1,35 @@
+from ../second/sequence, ../second/measures
+
+place gold
+place silver
+place bronze
+gold   [ next: silver ]
+silver [ next: bronze ]
+
+kind runner [
+  finished:  one place
+  ran:       one quantity
+]
+kind place [
+  runner:  runner by finished
+]
+
+quantity marathon [ amount: 26.21875 | unit: mile | as: kilometre ]
+quantity sprint   [ amount: 100 | unit: metre | as: yard ]
+quantity fever    [ amount: 101.3 | unit: fahrenheit | as: celsius ]
+quantity disk     [ amount: 2 | unit: tebibyte | as: gigabyte ]
+
+runner ada   [ finished: silver | ran: marathon ]
+runner blake [ finished: gold | ran: marathon ]
+runner cleo  [ finished: bronze | ran: sprint ]
+
+? bronze.rank
+? bronze.after
+? first.place.runner
+? runner r and r.finished before ada.finished
+? marathon.converted
+? marathon.base > sprint.base
+? fever.converted
+? disk.converted
+? length.unit
+? mile.symbol

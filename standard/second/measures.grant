@@ -1,0 +1,95 @@
+from numbers, text
+
+kind dimension
+dimension length
+dimension mass
+dimension volume
+dimension area
+dimension temperature
+dimension timespan
+dimension speed
+dimension data
+
+kind unit [
+  measures:  one dimension
+  symbol:    one text
+  factor:    one number
+  shift:     maybe number
+]
+kind dimension [
+  unit:  unit by measures
+]
+
+unit millimetre    [ measures: length | symbol: "mm"  | factor: 0.001 ]
+unit centimetre    [ measures: length | symbol: "cm"  | factor: 0.01 ]
+unit metre         [ measures: length | symbol: "m"   | factor: 1 ]
+unit kilometre     [ measures: length | symbol: "km"  | factor: 1000 ]
+unit inch          [ measures: length | symbol: "in"  | factor: 0.0254 ]
+unit foot          [ measures: length | symbol: "ft"  | factor: 0.3048 ]
+unit yard          [ measures: length | symbol: "yd"  | factor: 0.9144 ]
+unit mile          [ measures: length | symbol: "mi"  | factor: 1609.344 ]
+unit nautical_mile [ measures: length | symbol: "nmi" | factor: 1852 ]
+
+unit milligram [ measures: mass | symbol: "mg" | factor: 0.000001 ]
+unit gram      [ measures: mass | symbol: "g"  | factor: 0.001 ]
+unit kilogram  [ measures: mass | symbol: "kg" | factor: 1 ]
+unit tonne     [ measures: mass | symbol: "t"  | factor: 1000 ]
+unit ounce     [ measures: mass | symbol: "oz" | factor: 0.028349523125 ]
+unit pound     [ measures: mass | symbol: "lb" | factor: 0.45359237 ]
+unit stone     [ measures: mass | symbol: "st" | factor: 6.35029318 ]
+
+unit millilitre      [ measures: volume | symbol: "ml"     | factor: 0.001 ]
+unit centilitre      [ measures: volume | symbol: "cl"     | factor: 0.01 ]
+unit litre           [ measures: volume | symbol: "l"      | factor: 1 ]
+unit cubic_metre     [ measures: volume | symbol: "m³"     | factor: 1000 ]
+unit us_fluid_ounce  [ measures: volume | symbol: "fl oz"  | factor: 0.0295735295625 ]
+unit us_pint         [ measures: volume | symbol: "pt"     | factor: 0.473176473 ]
+unit us_gallon       [ measures: volume | symbol: "gal"    | factor: 3.785411784 ]
+unit imperial_pint   [ measures: volume | symbol: "imp pt" | factor: 0.56826125 ]
+unit imperial_gallon [ measures: volume | symbol: "imp gal" | factor: 4.54609 ]
+
+unit square_metre     [ measures: area | symbol: "m²"  | factor: 1 ]
+unit hectare          [ measures: area | symbol: "ha"  | factor: 10000 ]
+unit square_kilometre [ measures: area | symbol: "km²" | factor: 1000000 ]
+unit square_foot      [ measures: area | symbol: "ft²" | factor: 0.09290304 ]
+unit acre             [ measures: area | symbol: "ac"  | factor: 4046.8564224 ]
+unit square_mile      [ measures: area | symbol: "mi²" | factor: 2589988.110336 ]
+
+unit kelvin     [ measures: temperature | symbol: "K"  | factor: 1 ]
+unit celsius    [ measures: temperature | symbol: "°C" | factor: 1     | shift: 273.15 ]
+unit fahrenheit [ measures: temperature | symbol: "°F" | factor: 5 / 9 | shift: 459.67 * 5 / 9 ]
+
+unit second [ measures: timespan | symbol: "s"   | factor: 1 ]
+unit minute [ measures: timespan | symbol: "min" | factor: 60 ]
+unit hour   [ measures: timespan | symbol: "h"   | factor: 3600 ]
+unit day    [ measures: timespan | symbol: "d"   | factor: 86400 ]
+unit week   [ measures: timespan | symbol: "wk"  | factor: 604800 ]
+
+unit metre_per_second   [ measures: speed | symbol: "m/s"  | factor: 1 ]
+unit kilometre_per_hour [ measures: speed | symbol: "km/h" | factor: 5 / 18 ]
+unit mile_per_hour      [ measures: speed | symbol: "mph"  | factor: 0.44704 ]
+unit knot               [ measures: speed | symbol: "kn"   | factor: 1852 / 3600 ]
+
+unit bit      [ measures: data | symbol: "bit" | factor: 1 / 8 ]
+unit byte     [ measures: data | symbol: "B"   | factor: 1 ]
+unit kilobyte [ measures: data | symbol: "kB"  | factor: 1000 ]
+unit megabyte [ measures: data | symbol: "MB"  | factor: 1000000 ]
+unit gigabyte [ measures: data | symbol: "GB"  | factor: 1000000000 ]
+unit terabyte [ measures: data | symbol: "TB"  | factor: 1000000000000 ]
+unit kibibyte [ measures: data | symbol: "KiB" | factor: 1024 ]
+unit mebibyte [ measures: data | symbol: "MiB" | factor: 1048576 ]
+unit gibibyte [ measures: data | symbol: "GiB" | factor: 1073741824 ]
+unit tebibyte [ measures: data | symbol: "TiB" | factor: 1099511627776 ]
+
+kind quantity [
+  amount:     one number
+  unit:       one unit
+  as:         maybe unit
+  base:       one number
+  converted:  maybe number
+]
+
+rule quantity_base:      quantity q base q.amount * q.unit.factor + sum q.unit.shift
+rule quantity_converted: quantity q converted (q.base - sum q.as.shift) / q.as.factor
+
+never quantity_same_dimension: quantity q where q.as.measures != q.unit.measures

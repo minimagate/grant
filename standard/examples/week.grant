@@ -1,0 +1,45 @@
+from ../third/agenda, ../third/moments, ../third/workweek
+
+date monday_16    [ year: 2026 | month: 11 | day: 16 ]
+date tuesday_17   [ year: 2026 | month: 11 | day: 17 ]
+date christmas_26 [ year: 2026 | month: 12 | day: 25 ]
+date boxing_26    [ year: 2026 | month: 12 | day: 26 ]
+date monday_28    [ year: 2026 | month: 12 | day: 28 ]
+
+time nine     [ hour: 9  | minute: 0 ]
+time half_ten [ hour: 10 | minute: 30 ]
+time eleven   [ hour: 11 | minute: 0 ]
+time late     [ hour: 23 | minute: 0 ]
+
+duration one_hour     [ hours: 1 ]
+duration ninety       [ minutes: 90 ]
+duration three_hours  [ hours: 3 ]
+
+event standup  [ on: monday_16  | starts: nine     | lasts: ninety ]
+event review   [ on: monday_16  | starts: half_ten | lasts: one_hour ]
+event workshop [ on: monday_16  | starts: eleven   | lasts: one_hour ]
+event party    [ on: monday_16  | starts: late     | lasts: three_hours ]
+event call     [ on: tuesday_17 | starts: nine     | lasts: one_hour ]
+
+routine gym [ every: monday, thursday | starts: half_ten | lasts: one_hour ]
+
+? standup.overlaps
+? workshop.overlaps
+? party.finishes - call.begins
+? gym.falls_on
+? gym.collides_with
+? monday_16.event
+
+zone rome     [ offset: 60 ]
+zone new_york [ offset: -300 ]
+moment sent     [ on: monday_16 | at: nine | zone: rome ]
+moment received [ on: monday_16 | at: nine | zone: new_york ]
+? received.universal - sent.universal
+? moment m and m.universal < received.universal
+
+feast christmas [ month: 12 | day: 25 ]
+monday_28 is holiday
+? christmas.date
+? holiday.date
+? working_day.date
+? count day_off.date

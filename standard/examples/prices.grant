@@ -1,0 +1,17 @@
+from ../second/money
+
+eur [ worth: 1 ]
+usd [ worth: 0.8 ]
+jpy [ worth: 0.005 ]
+
+money ticket  [ amount: 120 | currency: usd | as: eur ]
+money dinner  [ amount: 9000 | currency: jpy | as: usd ]
+money coffee  [ amount: 2.5 | currency: eur ]
+
+? ticket.converted
+? dinner.converted
+? dinner.in_minor
+? coffee.in_minor
+? sum eur.money.amount
+? money m and m.worth > 50
+? jpy.code

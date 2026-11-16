@@ -1,0 +1,52 @@
+from numbers, text
+
+kind currency [
+  code:    one text
+  symbol:  one text
+  minor:   one number
+  worth:   maybe number
+]
+
+currency eur [ code: "EUR" | symbol: "€"   | minor: 100 ]
+currency usd [ code: "USD" | symbol: "$"   | minor: 100 ]
+currency gbp [ code: "GBP" | symbol: "£"   | minor: 100 ]
+currency chf [ code: "CHF" | symbol: "Fr"  | minor: 100 ]
+currency jpy [ code: "JPY" | symbol: "¥"   | minor: 1 ]
+currency cny [ code: "CNY" | symbol: "¥"   | minor: 100 ]
+currency cad [ code: "CAD" | symbol: "$"   | minor: 100 ]
+currency aud [ code: "AUD" | symbol: "$"   | minor: 100 ]
+currency nzd [ code: "NZD" | symbol: "$"   | minor: 100 ]
+currency hkd [ code: "HKD" | symbol: "$"   | minor: 100 ]
+currency sgd [ code: "SGD" | symbol: "$"   | minor: 100 ]
+currency sek [ code: "SEK" | symbol: "kr"  | minor: 100 ]
+currency nok [ code: "NOK" | symbol: "kr"  | minor: 100 ]
+currency dkk [ code: "DKK" | symbol: "kr"  | minor: 100 ]
+currency pln [ code: "PLN" | symbol: "zł"  | minor: 100 ]
+currency czk [ code: "CZK" | symbol: "Kč"  | minor: 100 ]
+currency huf [ code: "HUF" | symbol: "Ft"  | minor: 100 ]
+currency inr [ code: "INR" | symbol: "₹"   | minor: 100 ]
+currency krw [ code: "KRW" | symbol: "₩"   | minor: 1 ]
+currency brl [ code: "BRL" | symbol: "R$"  | minor: 100 ]
+currency mxn [ code: "MXN" | symbol: "$"   | minor: 100 ]
+currency zar [ code: "ZAR" | symbol: "R"   | minor: 100 ]
+currency try [ code: "TRY" | symbol: "₺"   | minor: 100 ]
+currency kwd [ code: "KWD" | symbol: "KD"  | minor: 1000 ]
+
+kind money [
+  amount:     one number
+  currency:   one currency
+  in_minor:   one number
+  as:         maybe currency
+  worth:      maybe number
+  converted:  maybe number
+]
+kind currency [
+  money:  money by currency
+]
+
+rule money_in_minor:  money m in_minor m.amount * m.currency.minor
+rule money_worth:     money m worth m.amount * m.currency.worth
+rule money_converted: money m converted m.worth / m.as.worth
+
+never money_finer_than_minor: money m where m.in_minor mod 1 != 0
+never money_as_needs_worth:   money m where m as currency c and not m converted number n

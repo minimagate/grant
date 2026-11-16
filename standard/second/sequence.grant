@@ -1,0 +1,25 @@
+from numbers
+
+kind edge
+edge first
+edge last
+
+kind place [
+  next:      maybe place
+  previous:  maybe place by next
+  after:     place
+  before:    place by after
+  rank:      one number
+  is:        edge
+]
+kind edge [
+  place:  place by is
+]
+
+rule place_after: place a after place b if b next a or (b next place m and a after m)
+rule place_rank:  place p rank 1 + count p.after
+rule place_first: place p is first if not place q next p
+rule place_last:  place p is last if not p next place q
+
+never place_circle: place p where p after p
+never place_fork:   place p where count p.previous > 1

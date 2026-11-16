@@ -11,7 +11,8 @@
   A language for describing worlds and changing them.<br>
   <a href="https://minimagate.github.io/grant-homepage/">The Grant Programming Language</a> ·
   <a href="docs/foundation-1.md">Specification</a> ·
-  <a href="examples">Examples</a>
+  <a href="examples">Examples</a> ·
+  <a href="standard">Standard worlds</a>
 </p>
 
 ---
@@ -163,6 +164,22 @@ grant watch review      # then edit people.grant, or a plan, and watch the verdi
 
 The rest of [`examples`](examples) has the worlds of the specification, a merge to settle, worlds compared as objects, and a calendar built on `numbers`. The example files carry no comments; [`examples/README.md`](examples/README.md) explains each one.
 
+## Standard worlds
+
+[`standard`](standard) has the ordinary things that are tedious to state again, each an ordinary world written only with the primitives. Six are of the second order, built on the primitive worlds alone: `calendar`, `clock`, `durations`, `measures`, `money` and `sequence`. Four are of the third, built on those: `moments`, `agenda`, `workweek` and `ledger`.
+
+```grant
+from ../standard/second/calendar
+
+date launch   [ year: 2026 | month: 11 | day: 16 ]
+date deadline [ days: launch.days + 45 ]
+
+? launch.falls_on       -- monday
+? deadline.falls_in     -- december
+```
+
+[`standard/README.md`](standard/README.md) describes each one.
+
 ## Editor support
 
 [`editors/vim`](editors/vim) has syntax highlighting for Vim and Neovim. Copy or link `syntax/grant.vim` and `ftdetect/grant.vim` into your config folder (`~/.config/nvim`).
@@ -184,7 +201,7 @@ The rest of [`examples`](examples) has the worlds of the specification, a merge 
 The crate is also a library: `grant::Loader` runs files and `grant::Session` states a world line by line.
 
 ```sh
-cargo test      # the specification's examples, every error of section 15, and the department project
+cargo test      # the specification's examples, every error of section 15, the department project and the standard worlds
 ```
 
 The logo and its construction are in [`logo`](logo).

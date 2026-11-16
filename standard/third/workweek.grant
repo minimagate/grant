@@ -1,0 +1,27 @@
+from ../second/calendar
+
+kind feast [
+  month:  one number
+  day:    one number
+]
+
+kind day_kind
+day_kind holiday
+day_kind working_day
+day_kind day_off
+
+kind date [
+  observes:  feast
+  is:        day_kind
+]
+kind feast [
+  date:  date by observes
+]
+kind day_kind [
+  date:  date by is
+]
+
+rule date_observes:    date d observes feast f if f.month = d.month and f.day = d.day
+rule date_holiday:     date d is holiday if d observes feast f
+rule date_working_day: date d is working_day if d.falls_on is workday and not d is holiday
+rule date_day_off:     date d is day_off if not d is working_day

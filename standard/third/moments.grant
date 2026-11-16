@@ -1,0 +1,26 @@
+from ../second/calendar, ../second/clock
+
+kind zone [
+  offset:  one number
+]
+zone utc [ offset: 0 ]
+
+kind moment [
+  on:         one date
+  at:         one time
+  zone:       maybe zone
+  local:      one number
+  universal:  one number
+]
+kind date [
+  moment:  moment by on
+]
+kind time [
+  moment:  moment by at
+]
+kind zone [
+  moment:  moment by zone
+]
+
+rule moment_local:     moment m local m.on.days * 1440 + m.at.since_midnight
+rule moment_universal: moment m universal m.local - sum m.zone.offset
